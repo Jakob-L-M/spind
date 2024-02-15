@@ -5,15 +5,18 @@ import com.opencsv.CSVReader;
 import com.opencsv.CSVReaderBuilder;
 import com.opencsv.exceptions.CsvValidationException;
 import runner.Config;
+import structures.Attribute;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.List;
 
 public class RelationalInput {
 
+    private final List<Attribute> attributes;
     public String[] headerLine;
-    public int tableOffset;
+    public int relationOffset;
     protected CSVReader CSVReader;
     protected String[] nextLine;
     protected String relationName;
@@ -25,9 +28,10 @@ public class RelationalInput {
     private final Config config;
 
 
-    public RelationalInput(String relationName, String relationPath, Config config, int tableOffset) throws IOException {
+    public RelationalInput(String relationName, String relationPath, Config config, int relationOffset, List<Attribute> attributes) throws IOException {
         this.relationName = relationName;
-        this.tableOffset = tableOffset;
+        this.relationOffset = relationOffset;
+        this.attributes = attributes;
 
         this.config = config;
 
@@ -63,12 +67,30 @@ public class RelationalInput {
     }
 
     /**
-     * Builds the string representation for every attribute combination of the given table
-     * @return The array of values for the attributes. Where the ith entry belongs to the ith attribute combination
+     * Builds the string representation for every attribute combination of the given table and updates the attributes
+     * accordingly.
      */
-    public String[] nextAttributeCombinations() {
-        // TODO
-        return null;
+    public void updateAttributeCombinations() throws IOException {
+        String[] values = next();
+
+        for (Attribute a : attributes) {
+            StringBuilder entry = new StringBuilder();
+            int[] containedColumns = a.getContainedColumns();
+
+            // encode lengths to ensure uniqueness for multiple columns
+            if (containedColumns.length > 1) {
+                for (int i = 0; i < containedColumns.length - 2; i++) {
+                    entry.append(values[i].length()).append(':');
+                }
+                entry.append(values[containedColumns[containedColumns.length - 2]].length()).append('|');
+            }
+
+            for (int containedColumn : containedColumns) {
+                entry.append(values[containedColumn]);
+            }
+
+            a.setCurrentValue(entry.toString());
+        }
     }
 
     /**
