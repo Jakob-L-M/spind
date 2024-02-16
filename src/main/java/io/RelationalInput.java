@@ -10,28 +10,27 @@ import structures.Attribute;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 public class RelationalInput {
 
-    private final List<Attribute> attributes;
+    public final List<Attribute> attributes;
+    private final Config config;
     public String[] headerLine;
-    public int relationOffset;
+    public int relationId;
     protected CSVReader CSVReader;
     protected String[] nextLine;
     protected String relationName;
     protected int numberOfColumns = 0;
-    // Initialized to -1 because of lookahead
-    protected int currentLineNumber = -1;
+    protected int currentLineNumber = -1; // Initialized to -1 because of lookahead
     protected int numberOfSkippedLines = 0;
 
-    private final Config config;
+    // TODO: Add unary constructor
 
-
-    public RelationalInput(String relationName, String relationPath, Config config, int relationOffset, List<Attribute> attributes) throws IOException {
+    public RelationalInput(String relationName, String relationPath, Config config, int relationOffset, int relationId) throws IOException {
         this.relationName = relationName;
-        this.relationOffset = relationOffset;
-        this.attributes = attributes;
+        this.relationId = relationId;
 
         this.config = config;
 
@@ -64,7 +63,13 @@ public class RelationalInput {
         if (this.headerLine == null) {
             generateHeaderLine();
         }
+
+        this.attributes = new ArrayList<>();
+        for (int i = 0; i < headerLine.length; i++) {
+            attributes.add(new Attribute(relationOffset + i, relationId, new int[]{i}));
+        }
     }
+
 
     /**
      * Builds the string representation for every attribute combination of the given table and updates the attributes
@@ -74,9 +79,22 @@ public class RelationalInput {
         String[] values = next();
 
         for (Attribute a : attributes) {
-            StringBuilder entry = new StringBuilder();
             int[] containedColumns = a.getContainedColumns();
 
+            // TODO: Different Null-handling options
+            boolean skipValue = false;
+            for (int i = 0; i < containedColumns.length; i++) {
+                if (values[i] == null) {
+                    skipValue = true;
+                    break;
+                }
+            }
+            if (skipValue) {
+                a.setCurrentValue(null);
+                continue;
+            }
+
+            StringBuilder entry = new StringBuilder();
             // encode lengths to ensure uniqueness for multiple columns
             if (containedColumns.length > 1) {
                 for (int i = 0; i < containedColumns.length - 2; i++) {
@@ -95,6 +113,7 @@ public class RelationalInput {
 
     /**
      * Checks if there is a next line in the input file
+     *
      * @return true if another row is present false otherwise
      */
     public boolean hasNext() {
@@ -103,8 +122,9 @@ public class RelationalInput {
 
     /**
      * Reads the next input line and stores it in a String array.
+     *
      * @return The values of the next line
-     * @throws IOException
+     * @throws IOException if there is no next line
      */
     public String[] next() throws IOException {
         if (!hasNext()) return null;
@@ -127,6 +147,7 @@ public class RelationalInput {
 
     /**
      * If skipping a line with unexpected entries is not an option, this method will throw an error.
+     *
      * @param currentLine the line to be checked
      * @throws IOException if the size of the line does not match the expected size
      */
@@ -162,6 +183,7 @@ public class RelationalInput {
 
     /**
      * Reads the next line of the input file
+     *
      * @return null if there was no next line else the array of values
      */
     private String[] readNextLine() {
@@ -180,6 +202,7 @@ public class RelationalInput {
 
     /**
      * Replaces every string which resembles null to an actual null value
+     *
      * @param lineArray The array of values to be processed
      */
     private void replaceNull(String[] lineArray) {
