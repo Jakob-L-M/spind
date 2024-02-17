@@ -3,30 +3,39 @@ package structures;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.Arrays;
+import java.util.HashMap;
+
 /**
  * The entry class handles a single entry of some attribute. It provides comparison methods.
  */
-@Getter
 @Setter
+@Getter
 public
 class Entry implements Comparable<Entry> {
 
     private final int readerNumber;
     private String value;
-    private long occurrence;
+    private HashMap<Integer, Long> connectedAttributes;
 
-    /**
-     * To initialize an Entry we need its value, the number of occurrences and a pointer to the reader, that read the
-     * entry.
-     *
-     * @param value        The sting representation of the value, that the entry carries.
-     * @param occurrence   The number of occurrences within the attribute.
-     * @param readerNumber The id of the reader, that read the value.
-     */
-    public Entry(final String value, long occurrence, final int readerNumber) {
-        this.value = value;
-        this.occurrence = occurrence;
+
+    public Entry(final String rawLine, final int readerNumber) {
+        String[] parts = rawLine.split("-");
+        this.value = String.join("-", Arrays.copyOf(parts, parts.length - 1));
         this.readerNumber = readerNumber;
+        buildAttributeMap(parts[parts.length - 1]);
+    }
+
+    private void buildAttributeMap(String part) {
+        connectedAttributes = new HashMap<>();
+        String[] attributes = part.split(";");
+        for (String attribute : attributes) {
+            String[] idOccurrenceTuple = attribute.split(",");
+            if (idOccurrenceTuple.length != 2) {
+                continue;
+            }
+            connectedAttributes.put(Integer.valueOf(idOccurrenceTuple[0]), Long.valueOf(idOccurrenceTuple[1]));
+        }
     }
 
     @Override
@@ -49,6 +58,6 @@ class Entry implements Comparable<Entry> {
 
     @Override
     public String toString() {
-        return "Tuple(" + this.value + "," + this.occurrence + ", " + this.readerNumber + ")";
+        return "Tuple(" + this.value + "," + this.readerNumber + ")";
     }
 }
