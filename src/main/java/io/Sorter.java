@@ -26,6 +26,7 @@ public class Sorter {
     int currentSize;
     int spillCount;
     List<Path> spilledFiles;
+    Attribute[] attributeIndex;
 
     public Sorter(int maxMapSize) {
         this.maxMapSize = maxMapSize;
@@ -40,7 +41,8 @@ public class Sorter {
      *
      * @param input The relational input which should be processed.
      */
-    public void process(RelationalInput input, Config config) throws IOException {
+    public void process(RelationalInput input, Config config, Attribute[] attributeIndex) throws IOException {
+        this.attributeIndex = attributeIndex;
         while (input.hasNext()) {
             input.updateAttributeCombinations();
             for (Attribute attribute : input.attributes) {
@@ -58,7 +60,7 @@ public class Sorter {
                 }
             }
         }
-        writeOutput(Path.of(config.tempFolder + File.separator + "table_" + input.relationId + ".txt"));
+        writeOutput(Path.of(config.tempFolder + File.separator + "relation_" + input.relationId + ".txt"));
         input.close();
     }
 
@@ -77,12 +79,15 @@ public class Sorter {
         if (spillCount == 0) {
             for (String value : values.keySet().stream().sorted().toList()) {
                 bw.write(value);
-                bw.write('|'); // identifier, where the value ends
+                bw.write('-'); // identifier, where the value ends
                 Map<Integer, Long> attributesToOccurrences = values.get(value);
                 for (Integer attribute : attributesToOccurrences.keySet()) {
+                    long occurrences = attributesToOccurrences.get(attribute);
+                    attributeIndex[attribute].getMetadata().totalValues += occurrences;
+                    attributeIndex[attribute].getMetadata().uniqueValues += 1L;
                     bw.write(attribute.toString());
                     bw.write(','); // attribute-occurrence separator
-                    bw.write(attributesToOccurrences.get(attribute).toString());
+                    bw.write(String.valueOf(occurrences));
                     bw.write(';'); // attribute-attribute separator
                 }
                 bw.newLine();
@@ -90,5 +95,6 @@ public class Sorter {
         }
         bw.flush();
         bw.close();
+        values = new HashMap<>();
     }
 }
