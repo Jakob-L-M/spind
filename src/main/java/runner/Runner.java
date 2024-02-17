@@ -7,9 +7,11 @@ import java.io.IOException;
 public class Runner {
     public static void main(String[] args) throws IOException {
 
-        Config config = new Config(Config.Dataset.UEFA, 1.0);
+        long startTime = System.currentTimeMillis();
+        Config config = new Config(Config.Dataset.DATA_GOV, 1.0);
 
         Spind spind = new Spind(config);
         spind.execute();
+        System.out.println("Execution took: " + (System.currentTimeMillis() - startTime) + "ms");
     }
 }

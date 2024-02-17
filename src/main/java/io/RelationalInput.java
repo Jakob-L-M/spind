@@ -83,8 +83,8 @@ public class RelationalInput {
 
             // TODO: Different Null-handling options
             boolean skipValue = false;
-            for (int i = 0; i < containedColumns.length; i++) {
-                if (values[i] == null) {
+            for (int column : containedColumns) {
+                if (values[column] == null) {
                     skipValue = true;
                     break;
                 }
@@ -104,7 +104,7 @@ public class RelationalInput {
             }
 
             for (int containedColumn : containedColumns) {
-                entry.append(values[containedColumn]);
+                entry.append(values[containedColumn].replace('\n', '\0'));
             }
 
             a.setCurrentValue(entry.toString());

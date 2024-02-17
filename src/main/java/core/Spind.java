@@ -27,7 +27,7 @@ public class Spind {
 
         // 2) init the helper Classes
         Candidates candidates = new Candidates();
-        Sorter sorter = new Sorter(100_000);
+        Sorter sorter = new Sorter(100_000_000);
 
         // 3) while attributes not empty.
 
@@ -37,12 +37,14 @@ public class Spind {
         }
 
         // 3.1) Set up the current candidate maps.
-        candidates.intiCurrentLayer(attributes);
+        candidates.loadUnary(attributes);
 
         // 3.2) Validate candidates.
         Validator validator = new Validator(config, attributes, candidates);
         validator.validate();
 
+        int unary = candidates.current.keySet().stream().mapToInt(x -> candidates.current.get(x).size()).sum();
+        System.out.println(unary);
         // 3.3) Clean up files.
 
         // 3.4) Generate new attributes for next layer.
