@@ -7,7 +7,8 @@ import java.util.*;
  */
 public class Candidates {
     public Map<Integer, HashMap<Integer, Long>> current; //TODO use a single link list instead of an inner HashMap
-    public int layer = 1;
+    public int layer = 0;
+    private int nextAttributeId;
     HashMap<Integer, HashMap<Integer, HashMap<Integer, List<Integer>>>> unary;
 
     /**
@@ -17,6 +18,10 @@ public class Candidates {
      */
     public void prune(HashMap<Integer, Long> valueGroup) {
         for (int dependantAttributeId : valueGroup.keySet()) {
+            if (!current.containsKey(dependantAttributeId)) {
+                // the attribute does not depend on any other attribute.
+                continue;
+            }
             long occurrences = valueGroup.get(dependantAttributeId);
             HashMap<Integer, Long> referenced = current.get(dependantAttributeId);
             for (int referencedAttributeId : referenced.keySet().stream().toList()) {
@@ -28,7 +33,7 @@ public class Candidates {
                     referenced.remove(referencedAttributeId);
                 }
             }
-            // TODO: delete referenced if empty
+            if (referenced.isEmpty()) current.remove(dependantAttributeId);
         }
     }
 
@@ -43,64 +48,57 @@ public class Candidates {
             storeUnary(attributes, relationOffsets);
         }
         // generate next layer by the method proposed in the BINDER paper
-        Map<Attribute, Integer> nextAttributes = new HashMap<>();
-        Map<Integer, HashMap<Integer, Long>> nextCandidates = new HashMap<>();
-        int nextAttributeId = 0;
-        for (int dependantNaryId : current.keySet()) {
-            Attribute dependantNaryAttribute = attributes[dependantNaryId];
+        HashMap<Attribute, Integer> nextAttributes = new HashMap<>();
+        HashMap<Integer, HashMap<Integer, Long>> nextCandidates = new HashMap<>();
+        this.nextAttributeId = 0;
+        for (int naryDepId : current.keySet()) {
+            Attribute naryDepAttribute = attributes[naryDepId];
+            int depRelationId = naryDepAttribute.getRelationId();
             // condition 1: the expansion needs to be from the same relation
-            for (int unaryDepExpansionId : unary.get(dependantNaryAttribute.getRelationId()).keySet()) {
+            for (int unaryDepExpansionId : unary.get(depRelationId).keySet()) {
                 // condition 2/3: the position of the expansion must be greater than all already contained ids
-                if (unaryDepExpansionId <= Arrays.stream(dependantNaryAttribute.getContainedColumns()).max().orElse(-1)) {
+                if (unaryDepExpansionId <= Arrays.stream(naryDepAttribute.getContainedColumns()).max().orElse(-1)) {
                     continue;
                 }
 
-                for (int referentId : current.get(dependantNaryId).keySet()) {
-                    Attribute referentNaryAttribute = attributes[referentId];
-                    int referencedRelationId = referentNaryAttribute.getRelationId();
-                    // condition 1: the expansion needs to be from the same relation
-                    if (!unary.get(dependantNaryAttribute.getRelationId()).get(unaryDepExpansionId).containsKey(referencedRelationId)) {
+                for (int naryRefId : current.get(naryDepId).keySet()) {
+                    Attribute naryRefAttribute = attributes[naryRefId];
+                    int refRelationId = naryRefAttribute.getRelationId();
+
+                    // condition 1: the referenced expansion needs to be from the same relation as the nary referenced attribute
+                    if (!unary.get(depRelationId).get(unaryDepExpansionId).containsKey(refRelationId)) {
                         continue;
                     }
-                    for (int unaryRefExpansionId : unary.get(dependantNaryAttribute.getRelationId()).get(unaryDepExpansionId).get(referencedRelationId)) {
+
+                    for (int unaryRefExpansionId : unary.get(depRelationId).get(unaryDepExpansionId).get(refRelationId)) {
 
                         // condition 3: the expansion cannot be in the set that should be expanded.
-                        if (Arrays.stream(referentNaryAttribute.getContainedColumns()).anyMatch(x -> x == unaryRefExpansionId)) {
+                        if (Arrays.stream(naryRefAttribute.getContainedColumns()).anyMatch(x -> x == unaryRefExpansionId)) {
                             continue;
                         }
 
                         // the two expansions cannot overlap
-                        if (Arrays.stream(dependantNaryAttribute.getContainedColumns()).anyMatch(x -> x == unaryRefExpansionId)) {
-                            continue;
+                        if (refRelationId == depRelationId)
+                        {
+                            if (Arrays.stream(naryDepAttribute.getContainedColumns()).anyMatch(x -> x == unaryRefExpansionId)) {
+                                continue;
+                            }
+                            if (Arrays.stream(naryRefAttribute.getContainedColumns()).anyMatch(x -> x == unaryDepExpansionId)) {
+                                continue;
+                            }
+                            if (unaryRefExpansionId == unaryDepExpansionId) {
+                                continue;
+                            }
                         }
+
 
                         // valid candidate found
-                        Attribute dependant = new Attribute(-1,
-                                dependantNaryAttribute.getRelationId(),
-                                Arrays.copyOf(dependantNaryAttribute.getContainedColumns(), dependantNaryAttribute.getContainedColumns().length + 1));
-                        dependant.getContainedColumns()[dependant.getContainedColumns().length - 1] = unaryDepExpansionId;
+                        Attribute dependant = generateAttribute(naryDepAttribute, unaryDepExpansionId, nextAttributes);
 
-                        if (!nextAttributes.containsKey(dependant)) {
-                            dependant.setId(nextAttributeId);
-                            nextAttributes.put(dependant, nextAttributeId);
-                            nextAttributeId++;
-                        }
-                        dependant.setId(nextAttributes.get(dependant));
+                        Attribute referenced = generateAttribute(naryRefAttribute, unaryRefExpansionId, nextAttributes);
 
-                        Attribute referred = new Attribute(-1,
-                                referentNaryAttribute.getRelationId(),
-                                Arrays.copyOf(referentNaryAttribute.getContainedColumns(), referentNaryAttribute.getContainedColumns().length + 1));
-                        referred.getContainedColumns()[referred.getContainedColumns().length - 1] = unaryRefExpansionId;
-
-                        if (!nextAttributes.containsKey(referred)) {
-                            referred.setId(nextAttributeId);
-                            nextAttributes.put(referred, nextAttributeId);
-                            nextAttributeId++;
-                        }
-                        referred.setId(nextAttributes.get(referred));
-
-                        nextCandidates.computeIfAbsent(referred.getId(), k -> new HashMap<>());
-                        nextCandidates.get(referred.getId()).put(dependant.getId(), -1L); // violations are handled elsewhere
+                        nextCandidates.computeIfAbsent(dependant.getId(), k -> new HashMap<>());
+                        nextCandidates.get(dependant.getId()).put(referenced.getId(), 0L); // violations are handled elsewhere
                     }
 
                 }
@@ -111,7 +109,12 @@ public class Candidates {
             nextAttributeIndex[attribute.getId()] = attribute;
         }
         current = nextCandidates;
+        System.out.println(current.size());
         return nextAttributeIndex;
+    }
+
+    public void cleanCandidates() {
+        current.keySet().removeIf(integer -> current.get(integer).isEmpty());
     }
 
     /**
@@ -139,6 +142,23 @@ public class Candidates {
         }
     }
 
+    private Attribute generateAttribute(Attribute naryAttribute, int unaryExpansionId, HashMap<Attribute, Integer> nextAttributes) {
+        Attribute attribute = new Attribute(-1,
+                naryAttribute.getRelationId(),
+                Arrays.copyOf(naryAttribute.getContainedColumns(), naryAttribute.getContainedColumns().length + 1));
+        attribute.getContainedColumns()[naryAttribute.getContainedColumns().length] = unaryExpansionId;
+
+        if (!nextAttributes.containsKey(attribute)) {
+            attribute.setId(nextAttributeId);
+            nextAttributes.put(attribute, nextAttributeId);
+            nextAttributeId++;
+        } else {
+            attribute.setId(nextAttributes.get(attribute));
+        }
+
+        return attribute;
+    }
+
     /**
      * Given the attribute index, this method generates the current candidates.
      *
@@ -151,7 +171,7 @@ public class Candidates {
             for (Attribute referredAttribute : attributes) {
                 if (dependantAttribute.id == referredAttribute.id) continue;
 
-                dependantMap.put(referredAttribute.id, dependantAttribute.metadata.possibleViolations);
+                dependantMap.put(referredAttribute.id, 0L);//dependantAttribute.metadata.possibleViolations);
             }
             current.put(dependantAttribute.id, dependantMap);
         }
