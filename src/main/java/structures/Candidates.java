@@ -7,8 +7,8 @@ import java.util.*;
  */
 public class Candidates {
     public Map<Integer, HashMap<Integer, Long>> current; //TODO use a single link list instead of an inner HashMap
-    HashMap<Integer, HashMap<Integer, List<Integer>>> unary;
-    int layer = 1;
+    public int layer = 1;
+    HashMap<Integer, HashMap<Integer, HashMap<Integer, List<Integer>>>> unary;
 
     /**
      * Prunes the current candidates
@@ -20,12 +20,15 @@ public class Candidates {
             long occurrences = valueGroup.get(dependantAttributeId);
             HashMap<Integer, Long> referenced = current.get(dependantAttributeId);
             for (int referencedAttributeId : referenced.keySet().stream().toList()) {
+                // if the valueGroup includes the referenced Attribute: no violation
                 if (valueGroup.containsKey(referencedAttributeId)) continue;
 
+                // not null since we iterate over the key set
                 if (referenced.compute(referencedAttributeId, (k, v) -> v - occurrences) < 0) {
                     referenced.remove(referencedAttributeId);
                 }
             }
+            // TODO: delete referenced if empty
         }
     }
 
@@ -34,15 +37,10 @@ public class Candidates {
      *
      * @return A list of all Attributes, which are present in at least one candidate pair.
      */
-    public Attribute[] generateNextLayer(Attribute[] attributes) {
+    public Attribute[] generateNextLayer(Attribute[] attributes, int[] relationOffsets) {
         if (layer == 1) {
             // safe unary attributes
-            unary = new HashMap<>();
-            for (int dependentAttribute : current.keySet()) {
-                unary.computeIfAbsent(attributes[dependentAttribute].getRelationId(), k -> new HashMap<>());
-                unary.get(attributes[dependentAttribute].getRelationId())
-                        .put(dependentAttribute, current.get(dependentAttribute).keySet().stream().toList());
-            }
+            storeUnary(attributes, relationOffsets);
         }
         // generate next layer by the method proposed in the BINDER paper
         Map<Attribute, Integer> nextAttributes = new HashMap<>();
@@ -59,11 +57,13 @@ public class Candidates {
 
                 for (int referentId : current.get(dependantNaryId).keySet()) {
                     Attribute referentNaryAttribute = attributes[referentId];
-                    for (int unaryRefExpansionId : unary.get(dependantNaryAttribute.getRelationId()).get(unaryDepExpansionId)) {
-                        // condition 1: the expansion needs to be from the same relation
-                        if (attributes[unaryRefExpansionId].getRelationId() != referentNaryAttribute.getRelationId()) {
-                            continue;
-                        }
+                    int referencedRelationId = referentNaryAttribute.getRelationId();
+                    // condition 1: the expansion needs to be from the same relation
+                    if (!unary.get(dependantNaryAttribute.getRelationId()).get(unaryDepExpansionId).containsKey(referencedRelationId)) {
+                        continue;
+                    }
+                    for (int unaryRefExpansionId : unary.get(dependantNaryAttribute.getRelationId()).get(unaryDepExpansionId).get(referencedRelationId)) {
+
                         // condition 3: the expansion cannot be in the set that should be expanded.
                         if (Arrays.stream(referentNaryAttribute.getContainedColumns()).anyMatch(x -> x == unaryRefExpansionId)) {
                             continue;
@@ -110,7 +110,33 @@ public class Candidates {
         for (Attribute attribute : nextAttributes.keySet()) {
             nextAttributeIndex[attribute.getId()] = attribute;
         }
+        current = nextCandidates;
         return nextAttributeIndex;
+    }
+
+    /**
+     * Stores the unary pINDs so that they can be used to expand the n-ary attributes in the higher layers.
+     * Unary pINDs are stored as follows:
+     * [RelationId] maps to -> [DependantColumn] maps to -> [RelationId of reference] contains list of column numbers.
+     *
+     * @param attributes      The attribute index of all attributes with size 1.
+     * @param relationOffsets The id to column number offsets for each relation.
+     */
+    private void storeUnary(Attribute[] attributes, int[] relationOffsets) {
+        unary = new HashMap<>();
+        for (int dependentAttribute : current.keySet()) {
+            int dependentRelationId = attributes[dependentAttribute].getRelationId();
+            unary.computeIfAbsent(dependentRelationId, k -> new HashMap<>());
+            HashMap<Integer, HashMap<Integer, List<Integer>>> relationMap = unary.get(dependentRelationId);
+            HashMap<Integer, List<Integer>> referredAttributes = new HashMap<>();
+            for (int referencedAttribute : current.get(dependentAttribute).keySet()) {
+                int referencedRelationId = attributes[referencedAttribute].getRelationId();
+                referredAttributes.computeIfAbsent(referencedRelationId, k -> new ArrayList<>());
+
+                referredAttributes.get(referencedRelationId).add(referencedAttribute - relationOffsets[referencedRelationId]);
+            }
+            relationMap.put(dependentAttribute - relationOffsets[dependentRelationId], referredAttributes);
+        }
     }
 
     /**
