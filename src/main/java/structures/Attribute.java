@@ -23,10 +23,8 @@ public class Attribute {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        Attribute attribute = (Attribute) o;
-        return relationId == attribute.relationId && Arrays.equals(containedColumns, attribute.containedColumns);
+        return this.toString().equals(o.toString());
     }
 
     @Override
@@ -34,5 +32,10 @@ public class Attribute {
         int result = Objects.hash(relationId);
         result = 31 * result + Arrays.hashCode(containedColumns);
         return result;
+    }
+
+    @Override
+    public String toString() {
+        return "" + relationId + ": " + Arrays.toString(containedColumns);
     }
 }
