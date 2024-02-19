@@ -15,20 +15,23 @@ import java.util.List;
 
 public class RelationalInput {
 
-    public final List<Attribute> attributes;
+    public List<Attribute> attributes;
     private final Config config;
     public String[] headerLine;
     public int relationId;
     protected CSVReader CSVReader;
     protected String[] nextLine;
-    protected String relationName;
+    public String relationName;
     protected int numberOfColumns = 0;
     protected int currentLineNumber = -1; // Initialized to -1 because of lookahead
     protected int numberOfSkippedLines = 0;
 
     // TODO: Add unary constructor
-
     public RelationalInput(String relationName, String relationPath, Config config, int relationOffset, int relationId) throws IOException {
+        this(relationName, relationPath, config, relationOffset, relationId, null);
+    }
+
+    public RelationalInput(String relationName, String relationPath, Config config, int relationOffset, int relationId, List<Attribute> attributes) throws IOException {
         this.relationName = relationName;
         this.relationId = relationId;
 
@@ -64,9 +67,13 @@ public class RelationalInput {
             generateHeaderLine();
         }
 
-        this.attributes = new ArrayList<>();
-        for (int i = 0; i < headerLine.length; i++) {
-            attributes.add(new Attribute(relationOffset + i, relationId, new int[]{i}));
+        if (attributes == null) {
+            this.attributes = new ArrayList<>();
+            for (int i = 0; i < headerLine.length; i++) {
+                this.attributes.add(new Attribute(relationOffset + i, relationId, new int[]{i}));
+            }
+        } else {
+            this.attributes = attributes;
         }
     }
 
@@ -88,6 +95,7 @@ public class RelationalInput {
                     skipValue = true;
                     break;
                 }
+                values[column] = values[column].replace('\n', '\0');
             }
             if (skipValue) {
                 a.setCurrentValue(null);
@@ -98,13 +106,13 @@ public class RelationalInput {
             // encode lengths to ensure uniqueness for multiple columns
             if (containedColumns.length > 1) {
                 for (int i = 0; i < containedColumns.length - 2; i++) {
-                    entry.append(values[i].length()).append(':');
+                    entry.append(values[containedColumns[i]].length()).append(':');
                 }
                 entry.append(values[containedColumns[containedColumns.length - 2]].length()).append('|');
             }
 
             for (int containedColumn : containedColumns) {
-                entry.append(values[containedColumn].replace('\n', '\0'));
+                entry.append(values[containedColumn]);
             }
 
             a.setCurrentValue(entry.toString());
