@@ -7,11 +7,14 @@ import runner.Config;
 import structures.Attribute;
 import structures.Candidates;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 
 public class Spind {
@@ -30,12 +33,10 @@ public class Spind {
 
         // 2) init the helper Classes
         Candidates candidates = new Candidates();
-        Sorter sorter = new Sorter(100_000_000);
+        Sorter sorter = new Sorter(1000);
 
         // load the unary candidates
         candidates.loadUnary(attributes);
-
-        HashMap<String, List<String>> output = new HashMap<>();
 
         // 3) while attributes not empty.
         while (attributes.length > 0) {
@@ -46,6 +47,7 @@ public class Spind {
             System.out.print("Layer: " + candidates.layer + " | Attributes: " + attributes.length);
             // 3.1) Load all attributes of the candidates.
             for (RelationalInput input : inputs) {
+                if (input == null) continue;
                 sorter.process(input, config, attributes);
                 input.close();
             }
@@ -61,7 +63,7 @@ public class Spind {
             int unary = candidates.current.keySet().stream().mapToInt(x -> candidates.current.get(x).size()).sum();
             System.out.println(" | pINDs: " + unary);
 
-            safePINDs(candidates, output, inputs, attributes);
+            storeResults(candidates, inputs, attributes);
             // 3.3) Clean up files.
 
             // 3.4) Generate new attributes for next layer.
@@ -72,38 +74,41 @@ public class Spind {
         // 4) Save the output
     }
 
-    private void safePINDs(Candidates candidates, HashMap<String, List<String>> output, List<RelationalInput> inputs, Attribute[] attributes) {
-        for (int depId : candidates.current.keySet()) {
-            Attribute dep = attributes[depId];
-            String[] depHeader = inputs.get(dep.getRelationId()).headerLine;
-            String depRelationName = inputs.get(dep.getRelationId()).relationName;
-            StringBuilder depString = new StringBuilder();
-            depString.append("(");
-            for (int col : dep.getContainedColumns()) {
-                depString.append(depRelationName)
-                        .append(".")
-                        .append(depHeader[col])
-                        .append(",");
-            };
-            depString.append(")");
+    private void storeResults(Candidates candidates, List<RelationalInput> inputs, Attribute[] attributes) throws IOException {
+        if (candidates.current.isEmpty()) return;
 
-            for (int refId : candidates.current.get(depId).keySet()) {
-                Attribute ref = attributes[refId];
-                String[] refheader = inputs.get(ref.getRelationId()).headerLine;
-                String refRelationName = inputs.get(ref.getRelationId()).relationName;
-                StringBuilder refString = new StringBuilder();
-                refString.append("(");
-                for (int col : ref.getContainedColumns()) {
-                    refString.append(refRelationName)
-                            .append(".")
-                            .append(refheader[col])
-                            .append(",");
-                };
-                refString.append(")");
-                output.computeIfAbsent(refString.toString(), k -> new ArrayList<>());
-                output.get(refString.toString()).add(depString.toString());
+        BufferedWriter outputWriter = Files.newBufferedWriter(Path.of(".\\results\\" + candidates.layer + "-ary_pINDs.txt"), StandardOpenOption.TRUNCATE_EXISTING);
+        for (int depId : candidates.current.keySet()) {
+            Attribute dependantAttribute = attributes[depId];
+            outputWriter.write('(');
+            for (int i = 0; i < dependantAttribute.getContainedColumns().length; i++) {
+                RelationalInput input = inputs.get(dependantAttribute.getRelationId());
+                outputWriter.write(input.relationName);
+                outputWriter.write('.');
+                outputWriter.write(input.headerLine[dependantAttribute.getContainedColumns()[i]]);
+                if (i != dependantAttribute.getContainedColumns().length - 1) {
+                    outputWriter.write(',');
+                }
             }
+            outputWriter.write(") <=");
+            for (int refId : candidates.current.get(depId).keySet()) {
+                Attribute referredAttribute = attributes[refId];
+                outputWriter.write(" (");
+                for (int i = 0; i < referredAttribute.getContainedColumns().length; i++) {
+                    RelationalInput input = inputs.get(referredAttribute.getRelationId());
+                    outputWriter.write(input.relationName);
+                    outputWriter.write('.');
+                    outputWriter.write(input.headerLine[referredAttribute.getContainedColumns()[i]]);
+                    if (i != referredAttribute.getContainedColumns().length - 1) {
+                        outputWriter.write(',');
+                    }
+                }
+                outputWriter.write(')');
+            }
+            outputWriter.newLine();
         }
+        outputWriter.flush();
+        outputWriter.close();
     }
 
     private Attribute[] initAttributes(List<RelationalInput> inputs) {
@@ -145,7 +150,10 @@ public class Spind {
             int finalRelationId = relationId;
 
             // only load relation if it is present in at least one attribute
-            if (Arrays.stream(attributes).noneMatch(x -> x.getRelationId() == finalRelationId)) continue;
+            if (Arrays.stream(attributes).noneMatch(x -> x.getRelationId() == finalRelationId)) {
+                inputs.add(null);
+                continue;
+            }
 
             inputs.add(new RelationalInput(config.tableNames[relationId],
                             config.folderPath + File.separator + config.databaseName + File.separator + config.tableNames[relationId] + config.fileEnding,
