@@ -1,7 +1,6 @@
 package structures;
 
 import lombok.Getter;
-import lombok.Setter;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -9,13 +8,13 @@ import java.util.HashMap;
 /**
  * The entry class handles a single entry of some attribute. It provides comparison methods.
  */
-@Setter
 @Getter
 public
 class Entry implements Comparable<Entry> {
 
     private final int readerNumber;
-    private String value;
+    private final String value;
+    private final String serializedAttributes;
     private HashMap<Integer, Long> connectedAttributes;
 
 
@@ -23,7 +22,14 @@ class Entry implements Comparable<Entry> {
         String[] parts = rawLine.split("-");
         this.value = String.join("-", Arrays.copyOf(parts, parts.length - 1));
         this.readerNumber = readerNumber;
-        buildAttributeMap(parts[parts.length - 1]);
+        this.serializedAttributes = parts[parts.length - 1];
+    }
+
+    /**
+     * Loads the serialized attributes in to the connected attributes hash map
+     */
+    public void load() {
+        buildAttributeMap(serializedAttributes);
     }
 
     private void buildAttributeMap(String part) {

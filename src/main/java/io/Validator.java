@@ -52,8 +52,9 @@ public class Validator {
         readersInTopValues.add(firstEntry.getReaderNumber());
         HashMap<Integer, Long> valueGroup = firstEntry.getConnectedAttributes();
         while (topValues.peek() != null && topValues.peek().equals(firstEntry)) {
-            readersInTopValues.add(topValues.peek().getReaderNumber());
-            valueGroup.putAll(topValues.poll().getConnectedAttributes()); // can not be null!
+            Entry inGroup = topValues.poll();
+            readersInTopValues.add(inGroup.getReaderNumber());
+            valueGroup.putAll(inGroup.getConnectedAttributes());
         }
         return valueGroup;
     }
@@ -70,6 +71,8 @@ public class Validator {
     private void updateReader(int readerNumber) throws IOException {
         String nextLine = readers[readerNumber].readLine();
         if (nextLine == null) return;
-        topValues.add(new Entry(nextLine, readerNumber));
+        Entry toAdd = new Entry(nextLine, readerNumber);
+        toAdd.load();
+        topValues.add(toAdd);
     }
 }
