@@ -33,7 +33,7 @@ public class Spind {
 
         // 2) init the helper Classes
         Candidates candidates = new Candidates();
-        Sorter sorter = new Sorter(1000);
+        Sorter sorter = new Sorter(3_000_000);
 
         // load the unary candidates
         candidates.loadUnary(attributes);

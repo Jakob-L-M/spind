@@ -109,7 +109,6 @@ public class Candidates {
             nextAttributeIndex[attribute.getId()] = attribute;
         }
         current = nextCandidates;
-        System.out.println(current.size());
         return nextAttributeIndex;
     }
 

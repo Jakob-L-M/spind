@@ -1,5 +1,7 @@
 package io;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import runner.Config;
 import structures.Attribute;
 
@@ -22,6 +24,7 @@ import java.util.Map;
  */
 public class Sorter {
     Map<String, Map<Integer, Long>> values;
+    Logger logger;
     int maxMapSize;
     int currentSize;
     int spillCount;
@@ -34,6 +37,7 @@ public class Sorter {
         currentSize = 0;
         spillCount = 0;
         spilledFiles = new ArrayList<>();
+        logger = LoggerFactory.getLogger(Sorter.class);
     }
 
     /**
@@ -55,46 +59,63 @@ public class Sorter {
                 if (1 == values.get(value).compute(attribute.getId(), (k, v) -> v == null ? 1 : v + 1)) {
                     currentSize++;
                     if (currentSize > maxMapSize) {
-                        spill();
+                        spill(input.relationId, config);
                     }
                 }
             }
         }
-        writeOutput(Path.of(config.tempFolder + File.separator + "relation_" + input.relationId + ".txt"));
         input.close();
+        Path relationPath = Path.of(config.tempFolder + File.separator + "relation_" + input.relationId + ".txt");
+        if (spilledFiles.size() == 0) {
+            writeOutput(relationPath, true);
+        } else {
+            spill(input.relationId, config);
+            Merger merger = new Merger();
+            merger.merge(spilledFiles, relationPath, attributeIndex);
+        }
+        spilledFiles.clear();
+        spillCount = 0;
     }
 
     /**
      * Will spill the current state to disk and clean the used memory
      */
-    private void spill() {
-
+    private void spill(int relationId, Config config) throws IOException {
+        spillCount++;
+        logger.info("Spilling relation" + relationId + " # " + spillCount);
+        Path spillPath = Path.of(config.tempFolder + File.separator + "spill_" + relationId + "_" + spillCount + ".txt");
+        spilledFiles.add(spillPath);
+        writeOutput(spillPath, false);
     }
 
     /**
      * Writes a processed output file
      */
-    private void writeOutput(Path outputPath) throws IOException {
+    private void writeOutput(Path outputPath, boolean isFinal) throws IOException {
         BufferedWriter bw = Files.newBufferedWriter(outputPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
-        if (spillCount == 0) {
-            for (String value : values.keySet().stream().sorted().toList()) {
-                bw.write(value);
-                bw.write('-'); // identifier, where the value ends
-                Map<Integer, Long> attributesToOccurrences = values.get(value);
-                for (Integer attribute : attributesToOccurrences.keySet()) {
-                    long occurrences = attributesToOccurrences.get(attribute);
+
+        for (String value : values.keySet().stream().sorted().toList()) {
+            bw.write(value);
+            bw.write('-'); // identifier, where the value ends
+            Map<Integer, Long> attributesToOccurrences = values.get(value);
+            for (Integer attribute : attributesToOccurrences.keySet()) {
+                long occurrences = attributesToOccurrences.get(attribute);
+
+                bw.write(attribute.toString());
+                bw.write(','); // attribute-occurrence separator
+                bw.write(String.valueOf(occurrences));
+                bw.write(';'); // attribute-attribute separator
+
+                if (isFinal) {
                     attributeIndex[attribute].getMetadata().totalValues += occurrences;
                     attributeIndex[attribute].getMetadata().uniqueValues += 1L;
-                    bw.write(attribute.toString());
-                    bw.write(','); // attribute-occurrence separator
-                    bw.write(String.valueOf(occurrences));
-                    bw.write(';'); // attribute-attribute separator
                 }
-                bw.newLine();
             }
+            bw.newLine();
         }
         bw.flush();
         bw.close();
         values = new HashMap<>();
+        currentSize = 0;
     }
 }
