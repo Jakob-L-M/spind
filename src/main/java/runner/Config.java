@@ -18,7 +18,7 @@ public class Config {
     public boolean ignoreLeadingWhiteSpace = true;
     public boolean inputFileHasHeader = true;
     public boolean inputFileSkipDifferingLines = true; // Skip lines that differ from the dataset's schema
-    public String inputFileNullString = "";
+    public String nullString = "";
     public boolean writeResults = true;
     public String executionName = "SPIND";
 
@@ -34,9 +34,12 @@ public class Config {
 
     private void setDataset(Config.Dataset dataset) {
         switch (dataset) {
-            case KAGGLE -> {
-                this.databaseName = "Kaggle";
-                this.tableNames = new String[]{"enrollement_schoolmanagement_2", "data", "amazon_laptop_prices_v01", "IQ_level", "Employee", "employee_data (1)"};
+            case ANIMAL_CROSSING -> {
+                this.databaseName = "Kaggle\\animal-crossing-new-horizons-nookplaza-dataset";
+                this.tableNames = new String[]{"accessories", "achievements", "art", "bags", "bottoms", "construction",
+                        "dress-up", "fencing", "fish", "floors", "fossils", "headwear", "housewares", "insects",
+                        "miscellaneous", "music", "other", "photos", "posters", "reactions", "recipes", "rugs", "shoes",
+                        "socks", "tools", "tops", "umbrellas", "villagers", "wall-mounted", "wallpaper"};
                 this.separator = ',';
                 this.inputFileHasHeader = true;
             }
@@ -67,7 +70,7 @@ public class Config {
     }
 
     public enum Dataset {
-        TPCH_1, KAGGLE, DATA_GOV, UEFA
+        TPCH_1, ANIMAL_CROSSING, DATA_GOV, UEFA
     }
 
     public enum NullHandling {
