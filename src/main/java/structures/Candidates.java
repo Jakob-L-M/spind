@@ -1,5 +1,8 @@
 package structures;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.*;
 
 /**
@@ -8,8 +11,9 @@ import java.util.*;
 public class Candidates {
     public Map<Integer, HashMap<Integer, Long>> current; //TODO use a single link list instead of an inner HashMap
     public int layer = 0;
-    private int nextAttributeId;
     HashMap<Integer, HashMap<Integer, HashMap<Integer, List<Integer>>>> unary;
+    private int nextAttributeId;
+    private final Logger logger = LoggerFactory.getLogger(Candidates.class);
 
     /**
      * Prunes the current candidates
@@ -43,9 +47,13 @@ public class Candidates {
      * @return A list of all Attributes, which are present in at least one candidate pair.
      */
     public Attribute[] generateNextLayer(Attribute[] attributes, int[] relationOffsets) {
+        HashMap<String, Set<String>> lookUp;
         if (layer == 1) {
             // safe unary attributes
             storeUnary(attributes, relationOffsets);
+            lookUp = new HashMap<>();
+        } else {
+            lookUp = createLookUps(attributes);
         }
         // generate next layer by the method proposed in the BINDER paper
         HashMap<Attribute, Integer> nextAttributes = new HashMap<>();
@@ -53,11 +61,16 @@ public class Candidates {
         this.nextAttributeId = 0;
         for (int naryDepId : current.keySet()) {
             Attribute naryDepAttribute = attributes[naryDepId];
+
+            if (naryDepAttribute.getMetadata().totalValues == 0) {
+                continue;
+            }
+
             int depRelationId = naryDepAttribute.getRelationId();
             // condition 1: the expansion needs to be from the same relation
-            for (int unaryDepExpansionId : unary.get(depRelationId).keySet()) {
+            for (int unaryDepColumn : unary.get(depRelationId).keySet()) {
                 // condition 2/3: the position of the expansion must be greater than all already contained ids
-                if (unaryDepExpansionId <= Arrays.stream(naryDepAttribute.getContainedColumns()).max().orElse(-1)) {
+                if (unaryDepColumn <= Arrays.stream(naryDepAttribute.getContainedColumns()).max().orElse(-1)) {
                     continue;
                 }
 
@@ -66,36 +79,44 @@ public class Candidates {
                     int refRelationId = naryRefAttribute.getRelationId();
 
                     // condition 1: the referenced expansion needs to be from the same relation as the nary referenced attribute
-                    if (!unary.get(depRelationId).get(unaryDepExpansionId).containsKey(refRelationId)) {
+                    if (!unary.get(depRelationId).get(unaryDepColumn).containsKey(refRelationId)) {
                         continue;
                     }
 
-                    for (int unaryRefExpansionId : unary.get(depRelationId).get(unaryDepExpansionId).get(refRelationId)) {
+                    for (int unaryRefColumn : unary.get(depRelationId).get(unaryDepColumn).get(refRelationId)) {
 
                         // condition 3: the expansion cannot be in the set that should be expanded.
-                        if (Arrays.stream(naryRefAttribute.getContainedColumns()).anyMatch(x -> x == unaryRefExpansionId)) {
+                        if (Arrays.stream(naryRefAttribute.getContainedColumns()).anyMatch(x -> x == unaryRefColumn)) {
                             continue;
                         }
 
                         // the two expansions cannot overlap
-                        if (refRelationId == depRelationId)
-                        {
-                            if (Arrays.stream(naryDepAttribute.getContainedColumns()).anyMatch(x -> x == unaryRefExpansionId)) {
+                        if (refRelationId == depRelationId) {
+                            if (Arrays.stream(naryDepAttribute.getContainedColumns()).anyMatch(x -> x == unaryRefColumn)) {
                                 continue;
                             }
-                            if (Arrays.stream(naryRefAttribute.getContainedColumns()).anyMatch(x -> x == unaryDepExpansionId)) {
+                            if (Arrays.stream(naryRefAttribute.getContainedColumns()).anyMatch(x -> x == unaryDepColumn)) {
                                 continue;
                             }
-                            if (unaryRefExpansionId == unaryDepExpansionId) {
+                            if (unaryRefColumn == unaryDepColumn) {
                                 continue;
                             }
                         }
 
+                        int[] dependantColumns = Arrays.copyOf(naryDepAttribute.containedColumns, layer + 1);
+                        dependantColumns[layer] = unaryDepColumn;
+
+                        int[] referencedColumns = Arrays.copyOf(naryRefAttribute.containedColumns, layer + 1);
+                        referencedColumns[layer] = unaryRefColumn;
+
+                        if (layer > 1 && !possibleCandidate(dependantColumns, referencedColumns, depRelationId, refRelationId, lookUp)) {
+                            continue;
+                        }
 
                         // valid candidate found
-                        Attribute dependant = generateAttribute(naryDepAttribute, unaryDepExpansionId, nextAttributes);
+                        Attribute dependant = generateAttribute(naryDepAttribute, unaryDepColumn, nextAttributes);
 
-                        Attribute referenced = generateAttribute(naryRefAttribute, unaryRefExpansionId, nextAttributes);
+                        Attribute referenced = generateAttribute(naryRefAttribute, unaryRefColumn, nextAttributes);
 
                         nextCandidates.computeIfAbsent(dependant.getId(), k -> new HashMap<>());
                         nextCandidates.get(dependant.getId()).put(referenced.getId(), 0L); // violations are handled elsewhere
@@ -110,6 +131,53 @@ public class Candidates {
         }
         current = nextCandidates;
         return nextAttributeIndex;
+    }
+
+    private HashMap<String, Set<String>> createLookUps(Attribute[] attributes) {
+        HashMap<String, Set<String>> lookup = new HashMap<>(current.size());
+        for (int depId : current.keySet()) {
+            String depString = attributes[depId].toString();
+            HashSet<String> depSet = new HashSet<>();
+            for (int refId : current.get(depId).keySet()) {
+                String refString = attributes[refId].toString();
+                depSet.add(refString);
+            }
+            lookup.put(depString, depSet);
+        }
+        return lookup;
+    }
+
+    private boolean possibleCandidate(int[] dependantColumns, int[] referencedColumns, int depRelationId, int refRelationId, HashMap<String, Set<String>> lookup) {
+        // a candidate can only be valid, if all included partitions of size-1 have been validated.
+        // we do not need to skip the last position, since that one is always possible
+        for (int skipIndex = 0; skipIndex < layer; skipIndex++) {
+            StringBuilder depString = new StringBuilder();
+            StringBuilder refString = new StringBuilder();
+
+            depString.append(depRelationId).append(": [");
+            refString.append(refRelationId).append(": [");
+
+            int attPointer = 0;
+            for (int col = 0; col < layer; col++) {
+                if (col == skipIndex) {
+                    attPointer++;
+                }
+                depString.append(dependantColumns[attPointer]).append(", ");
+                refString.append(referencedColumns[attPointer]).append(", ");
+
+                attPointer++;
+            }
+            depString.delete(depString.length()-2, depString.length()).append("]");
+            refString.delete(refString.length()-2, refString.length()).append("]");
+
+            Set<String> refSet = lookup.get(depString.toString());
+            if (refSet == null || !refSet.contains(refString.toString())) {
+                logger.debug("Skipped candidate. " + depRelationId + ": " + Arrays.toString(dependantColumns) + " -> "
+                + refRelationId + ": " + Arrays.toString(referencedColumns));
+                return false;
+            }
+        }
+        return true;
     }
 
     public void cleanCandidates() {
@@ -127,11 +195,25 @@ public class Candidates {
     private void storeUnary(Attribute[] attributes, int[] relationOffsets) {
         unary = new HashMap<>();
         for (int dependentAttribute : current.keySet()) {
+
+            if (attributes[dependentAttribute].getMetadata().totalValues == 0) {
+                // do not safe attributes which are completely empty. They do not carry meaning.
+                continue;
+            }
+
             int dependentRelationId = attributes[dependentAttribute].getRelationId();
-            unary.computeIfAbsent(dependentRelationId, k -> new HashMap<>());
-            HashMap<Integer, HashMap<Integer, List<Integer>>> relationMap = unary.get(dependentRelationId);
+
+            HashMap<Integer, HashMap<Integer, List<Integer>>> relationMap = unary.computeIfAbsent(dependentRelationId, k -> new HashMap<>());
+
             HashMap<Integer, List<Integer>> referredAttributes = new HashMap<>();
+
             for (int referencedAttribute : current.get(dependentAttribute).keySet()) {
+
+                if (attributes[referencedAttribute].getMetadata().totalValues == 0) {
+                    // do not safe attributes which are completely empty. They do not carry meaning.
+                    continue;
+                }
+
                 int referencedRelationId = attributes[referencedAttribute].getRelationId();
                 referredAttributes.computeIfAbsent(referencedRelationId, k -> new ArrayList<>());
 
