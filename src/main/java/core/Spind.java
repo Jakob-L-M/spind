@@ -1,5 +1,6 @@
 package core;
 
+import io.Output;
 import io.RelationalInput;
 import io.Sorter;
 import io.Validator;
@@ -9,12 +10,8 @@ import runner.Config;
 import structures.Attribute;
 import structures.Candidates;
 
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -23,9 +20,11 @@ public class Spind {
     Config config;
     int[] relationOffsets;
     Logger logger;
+    Output output;
 
     public Spind(Config config) {
         this.config = config;
+        this.output = new Output(config.resultFolder);
         this.logger = LoggerFactory.getLogger(Spind.class);
     }
 
@@ -67,7 +66,7 @@ public class Spind {
             int unary = candidates.current.keySet().stream().mapToInt(x -> candidates.current.get(x).size()).sum();
             logger.info("Found " + unary + " pINDs at level " + candidates.layer);
 
-            storeResults(candidates, inputs, attributes);
+            output.storePINDs(candidates, inputs, attributes);
             // 3.3) Clean up files.
 
             // 3.4) Generate new attributes for next layer.
@@ -76,43 +75,7 @@ public class Spind {
 
 
         // 4) Save the output
-    }
-
-    private void storeResults(Candidates candidates, List<RelationalInput> inputs, Attribute[] attributes) throws IOException {
-        if (candidates.current.isEmpty()) return;
-
-        BufferedWriter outputWriter = Files.newBufferedWriter(Path.of(".\\results\\" + candidates.layer + "-ary_pINDs.txt"), StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
-        for (int depId : candidates.current.keySet()) {
-            Attribute dependantAttribute = attributes[depId];
-            outputWriter.write('(');
-            for (int i = 0; i < dependantAttribute.getContainedColumns().length; i++) {
-                RelationalInput input = inputs.get(dependantAttribute.getRelationId());
-                outputWriter.write(input.relationName);
-                outputWriter.write('.');
-                outputWriter.write(input.headerLine[dependantAttribute.getContainedColumns()[i]]);
-                if (i != dependantAttribute.getContainedColumns().length - 1) {
-                    outputWriter.write(',');
-                }
-            }
-            outputWriter.write(") <=");
-            for (int refId : candidates.current.get(depId).keySet()) {
-                Attribute referredAttribute = attributes[refId];
-                outputWriter.write(" (");
-                for (int i = 0; i < referredAttribute.getContainedColumns().length; i++) {
-                    RelationalInput input = inputs.get(referredAttribute.getRelationId());
-                    outputWriter.write(input.relationName);
-                    outputWriter.write('.');
-                    outputWriter.write(input.headerLine[referredAttribute.getContainedColumns()[i]]);
-                    if (i != referredAttribute.getContainedColumns().length - 1) {
-                        outputWriter.write(',');
-                    }
-                }
-                outputWriter.write(')');
-            }
-            outputWriter.newLine();
-        }
-        outputWriter.flush();
-        outputWriter.close();
+        output.storeMetadata();
     }
 
     private Attribute[] initAttributes(List<RelationalInput> inputs) {

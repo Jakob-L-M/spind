@@ -10,6 +10,7 @@ public class Config {
     public String DEFAULT_HEADER_STRING = "column";
     public String folderPath = "D:\\MA\\data" + File.separator;
     public String tempFolder = ".\\temp";
+    public String resultFolder = ".\\result";
     public String fileEnding = ".csv";
     public char separator = ',';
     public char quoteChar = '\"';
