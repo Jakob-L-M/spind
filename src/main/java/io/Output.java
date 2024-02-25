@@ -1,7 +1,9 @@
 package io;
 
+import runner.Config;
 import structures.Attribute;
 import structures.Candidates;
+import structures.Clock;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -64,7 +66,11 @@ public class Output {
         outputWriter.close();
     }
 
-    public void storeMetadata() {
-
+    /**
+     *
+     * @param config
+     */
+    public void storeMetadata(Config config, Clock clock) {
+        System.out.println(clock.stop("total"));
     }
 }

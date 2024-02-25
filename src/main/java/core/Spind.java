@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import runner.Config;
 import structures.Attribute;
 import structures.Candidates;
+import structures.Clock;
 
 import java.io.File;
 import java.io.IOException;
@@ -21,10 +22,13 @@ public class Spind {
     int[] relationOffsets;
     Logger logger;
     Output output;
+    Clock clock;
 
     public Spind(Config config) {
         this.config = config;
         this.output = new Output(config.resultFolder);
+        this.clock = new Clock();
+        clock.start("total");
         this.logger = LoggerFactory.getLogger(Spind.class);
     }
 
@@ -75,7 +79,7 @@ public class Spind {
 
 
         // 4) Save the output
-        output.storeMetadata();
+        output.storeMetadata(config, clock);
     }
 
     private Attribute[] initAttributes(List<RelationalInput> inputs) {
