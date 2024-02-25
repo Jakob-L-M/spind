@@ -15,4 +15,3 @@ public class Runner {
         System.out.println("Execution took: " + (System.currentTimeMillis() - startTime) + "ms");
     }
 }
-// 583079
