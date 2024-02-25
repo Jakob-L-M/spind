@@ -3,6 +3,8 @@ package core;
 import io.RelationalInput;
 import io.Sorter;
 import io.Validator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import runner.Config;
 import structures.Attribute;
 import structures.Candidates;
@@ -20,9 +22,11 @@ import java.util.List;
 public class Spind {
     Config config;
     int[] relationOffsets;
+    Logger logger;
 
     public Spind(Config config) {
         this.config = config;
+        this.logger = LoggerFactory.getLogger(Spind.class);
     }
 
     public void execute() throws IOException {
@@ -44,7 +48,7 @@ public class Spind {
 
             if (candidates.layer > 1) inputs = openInputs(attributes);
 
-            System.out.print("Layer: " + candidates.layer + " | Attributes: " + attributes.length);
+            logger.info(" Starting layer: " + candidates.layer + " with " + attributes.length + " attributes forming " + candidates.current.keySet().stream().mapToInt(x -> candidates.current.get(x).size()).sum());
             // 3.1) Load all attributes of the candidates.
             for (RelationalInput input : inputs) {
                 if (input == null) continue;
@@ -61,7 +65,7 @@ public class Spind {
             candidates.cleanCandidates();
 
             int unary = candidates.current.keySet().stream().mapToInt(x -> candidates.current.get(x).size()).sum();
-            System.out.println(" | pINDs: " + unary);
+            logger.info("Found " + unary + " pINDs at level " + candidates.layer);
 
             storeResults(candidates, inputs, attributes);
             // 3.3) Clean up files.
@@ -77,7 +81,7 @@ public class Spind {
     private void storeResults(Candidates candidates, List<RelationalInput> inputs, Attribute[] attributes) throws IOException {
         if (candidates.current.isEmpty()) return;
 
-        BufferedWriter outputWriter = Files.newBufferedWriter(Path.of(".\\results\\" + candidates.layer + "-ary_pINDs.txt"), StandardOpenOption.TRUNCATE_EXISTING);
+        BufferedWriter outputWriter = Files.newBufferedWriter(Path.of(".\\results\\" + candidates.layer + "-ary_pINDs.txt"), StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
         for (int depId : candidates.current.keySet()) {
             Attribute dependantAttribute = attributes[depId];
             outputWriter.write('(');

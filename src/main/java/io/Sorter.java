@@ -51,6 +51,8 @@ public class Sorter {
             input.updateAttributeCombinations();
             for (Attribute attribute : input.attributes) {
                 String value = attribute.getCurrentValue();
+
+                // TODO: add null-handling
                 if (value == null) continue;
 
                 if (!values.containsKey(value)) {
