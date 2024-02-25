@@ -139,9 +139,6 @@ public class RelationalInput {
 
         String[] currentLine = this.nextLine;
 
-        if (currentLine == null) {
-            return null;
-        }
         this.nextLine = readNextLine();
 
         if (config.inputFileSkipDifferingLines) {
@@ -215,7 +212,7 @@ public class RelationalInput {
      */
     private void replaceNull(String[] lineArray) {
         for (int i = 0; i < lineArray.length; i++) {
-            if (lineArray[i].equals(config.inputFileNullString)) {
+            if (lineArray[i].equals(config.nullString)) {
                 lineArray[i] = null;
             }
         }
