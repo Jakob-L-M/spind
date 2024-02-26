@@ -4,9 +4,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import runner.Config;
 import structures.Attribute;
+import structures.SortJob;
 
 import java.io.BufferedWriter;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,24 +29,20 @@ public class Sorter {
     int currentSize;
     int spillCount;
     List<Path> spilledFiles;
-    Attribute[] attributeIndex;
 
     public Sorter(int maxMapSize) {
         this.maxMapSize = maxMapSize;
         values = new HashMap<>();
         currentSize = 0;
-        spillCount = 0;
-        spilledFiles = new ArrayList<>();
         logger = LoggerFactory.getLogger(Sorter.class);
     }
 
-    /**
-     * Produces a preprocessed file which overwrites the input file.
-     *
-     * @param input The relational input which should be processed.
-     */
-    public void process(RelationalInput input, Config config, Attribute[] attributeIndex) throws IOException {
-        this.attributeIndex = attributeIndex;
+
+    public List<Path> process(SortJob sortJob, Config config) throws IOException {
+        spillCount = 0;
+        spilledFiles = new ArrayList<>();
+
+        RelationalInput input = new RelationalInput(sortJob, config);
         while (input.hasNext()) {
             input.updateAttributeCombinations();
             for (Attribute attribute : input.attributes) {
@@ -61,39 +57,33 @@ public class Sorter {
                 if (1 == values.get(value).compute(attribute.getId(), (k, v) -> v == null ? 1 : v + 1)) {
                     currentSize++;
                     if (currentSize > maxMapSize) {
-                        spill(input.relationId, config);
+                        spill(sortJob.chunkPath());
                     }
                 }
             }
         }
         input.close();
-        Path relationPath = Path.of(config.tempFolder + File.separator + "relation_" + input.relationId + ".txt");
-        if (spilledFiles.size() == 0) {
-            writeOutput(relationPath, true);
-        } else {
-            spill(input.relationId, config);
-            Merger merger = new Merger();
-            merger.merge(spilledFiles, relationPath, attributeIndex);
+        if (!values.isEmpty()) {
+            spill(sortJob.chunkPath());
         }
-        spilledFiles.clear();
-        spillCount = 0;
+        return spilledFiles;
     }
 
     /**
      * Will spill the current state to disk and clean the used memory
      */
-    private void spill(int relationId, Config config) throws IOException {
+    private void spill(Path chunkPath) throws IOException {
         spillCount++;
-        logger.info("Spilling relation" + relationId + " # " + spillCount);
-        Path spillPath = Path.of(config.tempFolder + File.separator + "spill_" + relationId + "_" + spillCount + ".txt");
+        logger.info("Spilling " + chunkPath.getFileName() + " # " + spillCount);
+        Path spillPath = Path.of(chunkPath + "_" + spillCount + ".txt");
         spilledFiles.add(spillPath);
-        writeOutput(spillPath, false);
+        toDisk(spillPath);
     }
 
     /**
      * Writes a processed output file
      */
-    private void writeOutput(Path outputPath, boolean isFinal) throws IOException {
+    private void toDisk(Path outputPath) throws IOException {
         BufferedWriter bw = Files.newBufferedWriter(outputPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
 
         for (String value : values.keySet().stream().sorted().toList()) {
@@ -108,14 +98,9 @@ public class Sorter {
                 bw.write(String.valueOf(occurrences));
                 bw.write(';'); // attribute-attribute separator
 
-                if (isFinal) {
-                    attributeIndex[attribute].getMetadata().totalValues += occurrences;
-                    attributeIndex[attribute].getMetadata().uniqueValues += 1L;
-                }
             }
             bw.newLine();
         }
-        bw.flush();
         bw.close();
         values = new HashMap<>();
         currentSize = 0;

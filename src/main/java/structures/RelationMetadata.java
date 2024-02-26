@@ -19,16 +19,18 @@ import java.util.List;
  */
 public class RelationMetadata {
 
-    int relationId;
-    List<Path> chunks;
-    String[] columnNames;
-    String relationName;
+    public final int relationId;
+    public final List<Path> chunks;
+    public String[] columnNames;
+    public final String relationName;
+    public final int relationOffset;
+    public List<Attribute> connectedAttributes;
 
-    public RelationMetadata(String relationName, int relationId, int maxChunkSize, Path relationPath, Config config) throws IOException {
+    public RelationMetadata(String relationName, int relationId, int maxChunkSize, int relationOffset, Path relationPath, Config config) throws IOException {
         this.chunks = new ArrayList<>();
         this.relationName = relationName;
         this.relationId = relationId;
-        this.columnNames = getColumnNames(relationPath, config);
+        this.relationOffset = relationOffset;
         createChunks(maxChunkSize, relationPath, config);
     }
 
@@ -39,15 +41,19 @@ public class RelationMetadata {
      * @param maxSize The maximal number of lines each chunk should contain.
      */
     private void createChunks(int maxSize, Path relationPath, Config config) throws IOException {
-        RelationalInput relationalInput = new RelationalInput(relationName, relationPath.toString(), config, 0, 0);
+        RelationalInput relationalInput = new RelationalInput(relationPath, config);
+        this.columnNames = relationalInput.headerLine;
+
         int chunkNum = 0;
         Path chunkPath = Path.of(config.tempFolder + File.separator + "r_" + relationId + "_c_" + chunkNum + ".txt");
         BufferedWriter chunkWriter = Files.newBufferedWriter(chunkPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
         chunks.add(chunkPath);
 
         int chunkSize = 0;
+        String separator = String.valueOf(config.separator);
+
         while (relationalInput.hasNext()) {
-            chunkWriter.write(String.join(",", relationalInput.next()));
+            chunkWriter.write(String.join(separator, relationalInput.next()));
             chunkWriter.newLine();
             if (++chunkSize >= maxSize) {
                 chunkWriter.close();
@@ -63,19 +69,5 @@ public class RelationMetadata {
             }
         }
         chunkWriter.close();
-    }
-
-    /**
-     * using a csv reader, fetch the column names once.
-     *
-     * @param relationPath The path to the relation files
-     * @param config       The configuration which specifics the input structure
-     * @return The String Array of column names.
-     * @throws IOException If something goes wrong during file handling
-     */
-    private String[] getColumnNames(Path relationPath, Config config) throws IOException {
-        RelationalInput relationalInput = new RelationalInput(relationName, relationPath.toString(), config, 0, 0);
-        relationalInput.close();
-        return relationalInput.headerLine;
     }
 }

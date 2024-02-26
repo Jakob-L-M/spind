@@ -29,6 +29,7 @@ public class Output {
      * @param attributes The current attribute index
      * @throws IOException If something goes wrong during output writing
      */
+    /*
     public void storePINDs(Candidates candidates, List<RelationalInput> inputs, Attribute[] attributes) throws IOException {
         if (candidates.current.isEmpty()) return;
 
@@ -65,6 +66,8 @@ public class Output {
         outputWriter.flush();
         outputWriter.close();
     }
+
+     */
 
     /**
      *

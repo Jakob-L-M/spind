@@ -5,7 +5,6 @@ import structures.Entry;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -78,30 +77,24 @@ public class Merger {
     }
 
     private void writeValue(HashMap<Integer, Long> containedAttributes, Attribute[] attributes, BufferedWriter output, Entry previous) throws IOException {
-        if (containedAttributes.isEmpty()) {
-            // there is exactly one member in the group which was the previous element
-            output.write(previous.getValue() + "-" + previous.getSerializedAttributes());
+        // there are multiple attribute in the group
+        previous.load(); // add the last member
+        previous.getConnectedAttributes().forEach((k, v) -> containedAttributes.merge(k, v, Long::sum));
+        output.write(previous.getValue());
+        output.write('-'); // delimiter between value and connected attributes
+        for (Integer attribute : containedAttributes.keySet()) {
+            long occurrences = containedAttributes.get(attribute);
+
+            output.write(String.valueOf(attribute));
+            output.write(','); // attribute-occurrence separator
+            output.write(String.valueOf(occurrences));
+            output.write(';'); // attribute-attribute separator
+
+            attributes[attribute].getMetadata().totalValues += occurrences;
+            attributes[attribute].getMetadata().uniqueValues += 1L;
         }
+        containedAttributes.clear();
 
-        else {
-            // there are multiple attribute in the group
-            previous.load(); // add the last member
-            previous.getConnectedAttributes().forEach((k, v) -> containedAttributes.merge(k, v, Long::sum));
-            output.write(previous.getValue());
-            output.write('-'); // delimiter between value and connected attributes
-            for (Integer attribute : containedAttributes.keySet()) {
-                long occurrences = containedAttributes.get(attribute);
-
-                output.write(String.valueOf(attribute));
-                output.write(','); // attribute-occurrence separator
-                output.write(String.valueOf(occurrences));
-                output.write(';'); // attribute-attribute separator
-
-                attributes[attribute].getMetadata().totalValues += occurrences;
-                attributes[attribute].getMetadata().uniqueValues += 1L;
-            }
-            containedAttributes.clear();
-        }
         output.newLine();
     }
 

@@ -46,11 +46,11 @@ public class Candidates {
      *
      * @return A list of all Attributes, which are present in at least one candidate pair.
      */
-    public Attribute[] generateNextLayer(Attribute[] attributes, int[] relationOffsets) {
+    public Attribute[] generateNextLayer(Attribute[] attributes, RelationMetadata[] relationMetadata) {
         HashMap<String, Set<String>> lookUp;
         if (layer == 1) {
             // safe unary attributes
-            storeUnary(attributes, relationOffsets);
+            storeUnary(attributes, relationMetadata);
             lookUp = new HashMap<>();
         } else {
             lookUp = createLookUps(attributes);
@@ -188,11 +188,10 @@ public class Candidates {
      * Stores the unary pINDs so that they can be used to expand the n-ary attributes in the higher layers.
      * Unary pINDs are stored as follows:
      * [RelationId] maps to -> [DependantColumn] maps to -> [RelationId of reference] contains list of column numbers.
-     *
-     * @param attributes      The attribute index of all attributes with size 1.
-     * @param relationOffsets The id to column number offsets for each relation.
+     *  @param attributes      The attribute index of all attributes with size 1.
+     * @param relationMetadata Metadata that is used to access the relation offsets
      */
-    private void storeUnary(Attribute[] attributes, int[] relationOffsets) {
+    private void storeUnary(Attribute[] attributes, RelationMetadata[] relationMetadata) {
         unary = new HashMap<>();
         for (int dependentAttribute : current.keySet()) {
 
@@ -217,9 +216,9 @@ public class Candidates {
                 int referencedRelationId = attributes[referencedAttribute].getRelationId();
                 referredAttributes.computeIfAbsent(referencedRelationId, k -> new ArrayList<>());
 
-                referredAttributes.get(referencedRelationId).add(referencedAttribute - relationOffsets[referencedRelationId]);
+                referredAttributes.get(referencedRelationId).add(referencedAttribute - relationMetadata[referencedRelationId].relationOffset);
             }
-            relationMap.put(dependentAttribute - relationOffsets[dependentRelationId], referredAttributes);
+            relationMap.put(dependentAttribute - relationMetadata[dependentRelationId].relationOffset, referredAttributes);
         }
     }
 

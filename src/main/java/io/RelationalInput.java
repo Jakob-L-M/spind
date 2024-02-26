@@ -6,38 +6,32 @@ import com.opencsv.CSVReaderBuilder;
 import com.opencsv.exceptions.CsvValidationException;
 import runner.Config;
 import structures.Attribute;
+import structures.SortJob;
 
 import java.io.BufferedReader;
-import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 public class RelationalInput {
 
-    public List<Attribute> attributes;
     private final Config config;
+    public List<Attribute> attributes;
     public String[] headerLine;
-    public int relationId;
     protected CSVReader CSVReader;
     protected String[] nextLine;
-    public String relationName;
-    protected int numberOfColumns = 0;
     protected int currentLineNumber = -1; // Initialized to -1 because of lookahead
     protected int numberOfSkippedLines = 0;
+    private boolean chunkReader = true;
 
-    // TODO: Add unary constructor
-    public RelationalInput(String relationName, String relationPath, Config config, int relationOffset, int relationId) throws IOException {
-        this(relationName, relationPath, config, relationOffset, relationId, null);
-    }
+    public RelationalInput(Path relationPath, Config config) throws IOException {
 
-    public RelationalInput(String relationName, String relationPath, Config config, int relationOffset, int relationId, List<Attribute> attributes) throws IOException {
-        this.relationName = relationName;
-        this.relationId = relationId;
+        chunkReader = false;
 
         this.config = config;
 
-        BufferedReader reader = new BufferedReader(new FileReader(relationPath));
+        BufferedReader reader = Files.newBufferedReader(relationPath);
 
         this.CSVReader = new CSVReaderBuilder(reader)
                 .withCSVParser(
@@ -52,9 +46,6 @@ public class RelationalInput {
 
         // read the first line
         this.nextLine = readNextLine();
-        if (this.nextLine != null) {
-            this.numberOfColumns = this.nextLine.length;
-        }
 
         if (config.inputFileHasHeader) {
             this.headerLine = this.nextLine;
@@ -66,15 +57,33 @@ public class RelationalInput {
         if (this.headerLine == null) {
             generateHeaderLine();
         }
+    }
 
-        if (attributes == null) {
-            this.attributes = new ArrayList<>();
-            for (int i = 0; i < headerLine.length; i++) {
-                this.attributes.add(new Attribute(relationOffset + i, relationId, new int[]{i}));
-            }
-        } else {
-            this.attributes = attributes;
-        }
+    /**
+     * Constructor for reading a chuck file
+     *
+     * @param sortJob the chunk to be processed
+     * @param config  the reading config
+     */
+    public RelationalInput(SortJob sortJob, Config config) throws IOException {
+        this.config = config;
+
+        BufferedReader reader = Files.newBufferedReader(sortJob.chunkPath());
+
+        this.CSVReader = new CSVReaderBuilder(reader)
+                .withCSVParser(
+                        new CSVParserBuilder()
+                                .withSeparator(config.separator)
+                                .withEscapeChar(config.fileEscape)
+                                .withIgnoreLeadingWhiteSpace(config.ignoreLeadingWhiteSpace)
+                                .withStrictQuotes(config.strictQuotes)
+                                .withQuoteChar(config.quoteChar)
+                                .build()
+                ).build();
+
+        // read the first line
+        this.nextLine = readNextLine();
+        this.attributes = sortJob.connectedAttributes();
     }
 
 
@@ -95,7 +104,7 @@ public class RelationalInput {
                     skipValue = true;
                     break;
                 }
-                values[column] = values[column].replace('\n', '\0');
+
             }
             if (skipValue) {
                 a.setCurrentValue(null);
@@ -134,32 +143,19 @@ public class RelationalInput {
      * @return The values of the next line
      * @throws IOException if there is no next line
      */
-    public String[] next() throws IOException {
+    public String[] next() {
         if (!hasNext()) return null;
 
         String[] currentLine = this.nextLine;
 
         this.nextLine = readNextLine();
 
-        if (config.inputFileSkipDifferingLines) {
+        if (!chunkReader && config.inputFileSkipDifferingLines) {
             readToNextValidLine();
-        } else {
-            failDifferingLine(currentLine);
         }
+
         currentLineNumber++;
         return currentLine;
-    }
-
-    /**
-     * If skipping a line with unexpected entries is not an option, this method will throw an error.
-     *
-     * @param currentLine the line to be checked
-     * @throws IOException if the size of the line does not match the expected size
-     */
-    private void failDifferingLine(String[] currentLine) throws IOException {
-        if (currentLine.length != this.numberOfColumns) {
-            throw new IOException("Unexpected number of entries encountered in table: " + relationName + " for row: " + this.currentLineNumber);
-        }
     }
 
     /**
@@ -169,7 +165,7 @@ public class RelationalInput {
     private void readToNextValidLine() {
         if (!hasNext()) return;
 
-        while (hasNext() && this.nextLine.length != this.numberOfColumns) {
+        while (hasNext() && this.nextLine.length != this.headerLine.length) {
             this.nextLine = readNextLine();
             this.numberOfSkippedLines++;
         }
@@ -180,8 +176,8 @@ public class RelationalInput {
      * column number to generate names.
      */
     private void generateHeaderLine() {
-        headerLine = new String[numberOfColumns];
-        for (int i = 0; i < this.numberOfColumns; i++) {
+        headerLine = new String[nextLine.length];
+        for (int i = 0; i < this.nextLine.length; i++) {
             headerLine[i] = config.DEFAULT_HEADER_STRING + i;
         }
     }
@@ -214,6 +210,8 @@ public class RelationalInput {
         for (int i = 0; i < lineArray.length; i++) {
             if (lineArray[i].equals(config.nullString)) {
                 lineArray[i] = null;
+            } else if (!chunkReader) {
+                lineArray[i] = lineArray[i].replace('\n', '\0');
             }
         }
     }
