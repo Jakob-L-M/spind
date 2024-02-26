@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import runner.Config;
 import structures.Attribute;
+import structures.MergeJob;
 import structures.SortJob;
 
 import java.io.BufferedWriter;
@@ -11,10 +12,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * The sorter is responsible for the creation of one pre-processed file per table. The files consist of as many lines as
@@ -38,11 +36,17 @@ public class Sorter {
     }
 
 
-    public List<Path> process(SortJob sortJob, Config config) throws IOException {
+    public MergeJob process(SortJob sortJob, Config config) {
         spillCount = 0;
         spilledFiles = new ArrayList<>();
 
-        RelationalInput input = new RelationalInput(sortJob, config);
+        RelationalInput input;
+        try {
+            input = new RelationalInput(sortJob, config);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
         while (input.hasNext()) {
             input.updateAttributeCombinations();
             for (Attribute attribute : input.attributes) {
@@ -51,9 +55,9 @@ public class Sorter {
                 // TODO: add null-handling
                 if (value == null) continue;
 
-                if (!values.containsKey(value)) {
-                    values.put(value, new HashMap<>());
-                }
+
+                values.computeIfAbsent(value, v -> new HashMap<>());
+
                 if (1 == values.get(value).compute(attribute.getId(), (k, v) -> v == null ? 1 : v + 1)) {
                     currentSize++;
                     if (currentSize > maxMapSize) {
@@ -62,19 +66,23 @@ public class Sorter {
                 }
             }
         }
-        input.close();
         if (!values.isEmpty()) {
             spill(sortJob.chunkPath());
         }
-        return spilledFiles;
+        try {
+            input.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return new MergeJob(spilledFiles, sortJob.relationId(), false);
     }
 
     /**
      * Will spill the current state to disk and clean the used memory
      */
-    private void spill(Path chunkPath) throws IOException {
+    private void spill(Path chunkPath) {
         spillCount++;
-        logger.info("Spilling " + chunkPath.getFileName() + " # " + spillCount);
+        logger.debug("Spilling " + chunkPath.getFileName() + " # " + spillCount);
         Path spillPath = Path.of(chunkPath + "_" + spillCount + ".txt");
         spilledFiles.add(spillPath);
         toDisk(spillPath);
@@ -83,25 +91,30 @@ public class Sorter {
     /**
      * Writes a processed output file
      */
-    private void toDisk(Path outputPath) throws IOException {
-        BufferedWriter bw = Files.newBufferedWriter(outputPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
+    private void toDisk(Path outputPath) {
+        try {
+            BufferedWriter bw = Files.newBufferedWriter(outputPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
 
-        for (String value : values.keySet().stream().sorted().toList()) {
-            bw.write(value);
-            bw.write('-'); // identifier, where the value ends
-            Map<Integer, Long> attributesToOccurrences = values.get(value);
-            for (Integer attribute : attributesToOccurrences.keySet()) {
-                long occurrences = attributesToOccurrences.get(attribute);
 
-                bw.write(attribute.toString());
-                bw.write(','); // attribute-occurrence separator
-                bw.write(String.valueOf(occurrences));
-                bw.write(';'); // attribute-attribute separator
+            for (String value : values.keySet().stream().sorted().toList()) {
+                bw.write(value);
+                bw.write('-'); // identifier, where the value ends
+                Map<Integer, Long> attributesToOccurrences = values.get(value);
+                for (Integer attribute : attributesToOccurrences.keySet()) {
+                    long occurrences = attributesToOccurrences.get(attribute);
 
+                    bw.write(attribute.toString());
+                    bw.write(','); // attribute-occurrence separator
+                    bw.write(String.valueOf(occurrences));
+                    bw.write(';'); // attribute-attribute separator
+
+                }
+                bw.newLine();
             }
-            bw.newLine();
+            bw.close();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-        bw.close();
         values = new HashMap<>();
         currentSize = 0;
     }

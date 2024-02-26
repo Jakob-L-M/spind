@@ -1,6 +1,9 @@
 package core;
 
-import io.*;
+import io.Merger;
+import io.Output;
+import io.Sorter;
+import io.Validator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import runner.Config;
@@ -8,8 +11,12 @@ import structures.*;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 public class Spind {
     Config config;
@@ -32,7 +39,6 @@ public class Spind {
 
         // 1) init the helper Classes
         Candidates candidates = new Candidates();
-        Sorter sorter = new Sorter(3_000_000);
 
         // 1) get all unary attributes.
         Attribute[] attributes = buildUnaryAttributes();
@@ -44,26 +50,36 @@ public class Spind {
 
             // create sort jobs
             attachAttributes(attributes);
-            Queue<SortJob> sortJobs = createSortJobs();
+            List<SortJob> sortJobs = createSortJobs();
 
 
             logger.info(" Starting layer: " + candidates.layer + " with " + attributes.length + " attributes forming " + candidates.current.keySet().stream().mapToInt(x -> candidates.current.get(x).size()).sum());
             // 3.1) Load all attributes of the candidates.
-            List<List<Path>> mergeJobs = new ArrayList<>();
+            List<MergeJob> mergeJobs = sortJobs.parallelStream().map(sortJob -> {
+                        Sorter sorter = new Sorter(200_000);
+                        return sorter.process(sortJob, config);
+                    }
+            ).toList();
+
+            List<MergeJob> groupedMergeJobs = new ArrayList<>();
             for (int i = 0; i < relationMetadata.length; i++) {
-                mergeJobs.add(new ArrayList<>());
+                groupedMergeJobs.add(new MergeJob(new ArrayList<>(), i, false));
             }
-            for (SortJob sortJob : sortJobs) {
-                mergeJobs.get(sortJob.relationId()).addAll(sorter.process(sortJob, config));
+
+            for (MergeJob mergeJob : mergeJobs) {
+                groupedMergeJobs.get(mergeJob.relationId()).chunkPaths().addAll(mergeJob.chunkPaths());
             }
-            for (int i = 0; i < relationMetadata.length; i++) {
-                List<Path> filesToMerge = mergeJobs.get(i);
-                if (filesToMerge.isEmpty()) {
-                    continue;
+
+
+            Attribute[] finalAttributes = attributes;
+            groupedMergeJobs.parallelStream().forEach(mergeJob -> {
+                if (mergeJob.chunkPaths().isEmpty()) {
+                    return;
                 }
                 Merger merger = new Merger();
-                merger.merge(filesToMerge, Path.of(config.tempFolder + File.separator + "relation_" + i + ".txt"), attributes);
-            }
+                Path resultPath = Path.of(config.tempFolder + File.separator + "relation_" + mergeJob.relationId() + ".txt");
+                merger.merge(mergeJob.chunkPaths(), resultPath, finalAttributes);
+            });
 
 
             // 3.2) Validate candidates.
@@ -83,6 +99,12 @@ public class Spind {
             attributes = candidates.generateNextLayer(attributes, relationMetadata);
         }
 
+        // clean chunks
+        for (RelationMetadata relation : relationMetadata) {
+            for (Path chunk : relation.chunks) {
+                Files.delete(chunk);
+            }
+        }
 
         // 4) Save the output
         output.storeMetadata(config, clock);
@@ -134,8 +156,8 @@ public class Spind {
         }
     }
 
-    private Queue<SortJob> createSortJobs() {
-        Queue<SortJob> jobs = new ArrayDeque<>();
+    private List<SortJob> createSortJobs() {
+        List<SortJob> jobs = new ArrayList<>();
 
         for (RelationMetadata relation : relationMetadata) {
             if (relation.connectedAttributes.isEmpty()) {

@@ -32,38 +32,42 @@ public class Merger {
 
     }
 
-    public void merge(List<Path> files, Path to, Attribute[] attributes) throws IOException {
-        this.init(files);
-        BufferedWriter output = Files.newBufferedWriter(to, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+    public void merge(List<Path> files, Path to, Attribute[] attributes) {
+        try {
+            this.init(files);
 
-        if (headValues.isEmpty()) return;
+            BufferedWriter output = Files.newBufferedWriter(to, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 
-        Entry previous = headValues.poll();
-        updateHeadValues(previous);
-        HashMap<Integer, Long> containedAttributes = new HashMap<>();
+            if (headValues.isEmpty()) return;
 
-        while (!this.headValues.isEmpty()) {
-            Entry current = headValues.poll();
-            if (!previous.equals(current)) {
-                // the previous value (group) is different -> safe value (group) to disk
-                writeValue(containedAttributes, attributes, output, previous);
-            } else {
-                // the current value still belongs to the value group.
-                // load previous and add to connected attributes
-                previous.load();
-                previous.getConnectedAttributes().forEach((k, v) -> containedAttributes.merge(k, v, Long::sum));
+            Entry previous = headValues.poll();
+            updateHeadValues(previous);
+            HashMap<Integer, Long> containedAttributes = new HashMap<>();
+
+            while (!this.headValues.isEmpty()) {
+                Entry current = headValues.poll();
+                if (!previous.equals(current)) {
+                    // the previous value (group) is different -> safe value (group) to disk
+                    writeValue(containedAttributes, attributes, output, previous);
+                } else {
+                    // the current value still belongs to the value group.
+                    // load previous and add to connected attributes
+                    previous.load();
+                    previous.getConnectedAttributes().forEach((k, v) -> containedAttributes.merge(k, v, Long::sum));
+                }
+                // update previous
+                previous = current;
+
+                updateHeadValues(current);
             }
-            // update previous
-            previous = current;
-
-            updateHeadValues(current);
-        }
-        writeValue(containedAttributes, attributes, output, previous);
-        output.flush();
-        output.close();
-        closeReaders();
-        for (Path path : files) {
-            Files.delete(path);
+            writeValue(containedAttributes, attributes, output, previous);
+            output.close();
+            closeReaders();
+            for (Path path : files) {
+                Files.delete(path);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 

@@ -12,6 +12,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class RelationalInput {
@@ -83,7 +85,10 @@ public class RelationalInput {
 
         // read the first line
         this.nextLine = readNextLine();
-        this.attributes = sortJob.connectedAttributes();
+        this.attributes = new ArrayList<>();
+        for (Attribute connectedAttribute : sortJob.connectedAttributes()) {
+            attributes.add(new Attribute(connectedAttribute.getId(), connectedAttribute.getRelationId(), connectedAttribute.getContainedColumns()));
+        }
     }
 
 
@@ -91,7 +96,7 @@ public class RelationalInput {
      * Builds the string representation for every attribute combination of the given table and updates the attributes
      * accordingly.
      */
-    public void updateAttributeCombinations() throws IOException {
+    public void updateAttributeCombinations() {
         String[] values = next();
 
         for (Attribute a : attributes) {
@@ -141,7 +146,6 @@ public class RelationalInput {
      * Reads the next input line and stores it in a String array.
      *
      * @return The values of the next line
-     * @throws IOException if there is no next line
      */
     public String[] next() {
         if (!hasNext()) return null;
