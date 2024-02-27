@@ -32,7 +32,7 @@ public class Merger {
 
     }
 
-    public void merge(List<Path> files, Path to, Attribute[] attributes) {
+    public void merge(List<Path> files, Path to, Attribute[] attributes, boolean isFinal) {
         try {
             this.init(files);
 
@@ -48,7 +48,7 @@ public class Merger {
                 Entry current = headValues.poll();
                 if (!previous.equals(current)) {
                     // the previous value (group) is different -> safe value (group) to disk
-                    writeValue(containedAttributes, attributes, output, previous);
+                    writeValue(containedAttributes, attributes, output, previous, isFinal);
                 } else {
                     // the current value still belongs to the value group.
                     // load previous and add to connected attributes
@@ -60,7 +60,7 @@ public class Merger {
 
                 updateHeadValues(current);
             }
-            writeValue(containedAttributes, attributes, output, previous);
+            writeValue(containedAttributes, attributes, output, previous, isFinal);
             output.close();
             closeReaders();
             for (Path path : files) {
@@ -80,7 +80,7 @@ public class Merger {
         }
     }
 
-    private void writeValue(HashMap<Integer, Long> containedAttributes, Attribute[] attributes, BufferedWriter output, Entry previous) throws IOException {
+    private void writeValue(HashMap<Integer, Long> containedAttributes, Attribute[] attributes, BufferedWriter output, Entry previous, boolean isFinal) throws IOException {
         // there are multiple attribute in the group
         previous.load(); // add the last member
         previous.getConnectedAttributes().forEach((k, v) -> containedAttributes.merge(k, v, Long::sum));
@@ -94,8 +94,10 @@ public class Merger {
             output.write(String.valueOf(occurrences));
             output.write(';'); // attribute-attribute separator
 
-            attributes[attribute].getMetadata().totalValues += occurrences;
-            attributes[attribute].getMetadata().uniqueValues += 1L;
+            if (isFinal) {
+                attributes[attribute].getMetadata().totalValues += occurrences;
+                attributes[attribute].getMetadata().uniqueValues += 1L;
+            }
         }
         containedAttributes.clear();
 

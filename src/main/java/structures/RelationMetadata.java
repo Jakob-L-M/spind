@@ -1,5 +1,6 @@
 package structures;
 
+import com.opencsv.CSVWriter;
 import io.RelationalInput;
 import runner.Config;
 
@@ -47,14 +48,12 @@ public class RelationMetadata {
         int chunkNum = 0;
         Path chunkPath = Path.of(config.tempFolder + File.separator + "r_" + relationId + "_c_" + chunkNum + ".txt");
         BufferedWriter chunkWriter = Files.newBufferedWriter(chunkPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
+        CSVWriter  csvWriter = new CSVWriter(chunkWriter);
         chunks.add(chunkPath);
-
         int chunkSize = 0;
-        String separator = String.valueOf(config.separator);
 
         while (relationalInput.hasNext()) {
-            chunkWriter.write(String.join(separator, relationalInput.next()));
-            chunkWriter.newLine();
+            csvWriter.writeNext(relationalInput.next());
             if (++chunkSize >= maxSize) {
                 chunkWriter.close();
 
@@ -64,6 +63,7 @@ public class RelationMetadata {
                     chunkSize = 0;
                     chunkPath = Path.of(config.tempFolder + File.separator + "r_" + relationId + "_c_" + chunkNum + ".txt");
                     chunkWriter = Files.newBufferedWriter(chunkPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
+                    csvWriter = new CSVWriter(chunkWriter);
                     chunks.add(chunkPath);
                 }
             }

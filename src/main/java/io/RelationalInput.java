@@ -72,16 +72,7 @@ public class RelationalInput {
 
         BufferedReader reader = Files.newBufferedReader(sortJob.chunkPath());
 
-        this.CSVReader = new CSVReaderBuilder(reader)
-                .withCSVParser(
-                        new CSVParserBuilder()
-                                .withSeparator(config.separator)
-                                .withEscapeChar(config.fileEscape)
-                                .withIgnoreLeadingWhiteSpace(config.ignoreLeadingWhiteSpace)
-                                .withStrictQuotes(config.strictQuotes)
-                                .withQuoteChar(config.quoteChar)
-                                .build()
-                ).build();
+        this.CSVReader = new CSVReader(reader);
 
         // read the first line
         this.nextLine = readNextLine();

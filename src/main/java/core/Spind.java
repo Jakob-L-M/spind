@@ -25,8 +25,8 @@ public class Spind {
     Clock clock;
     RelationMetadata[] relationMetadata;
     int mergeSize = 25;
-    int sortSize = 300_000;
-    int chunkSize = 500_000;
+    int sortSize = 100_000;
+    int chunkSize = 200_000;
 
     public Spind(Config config) {
         this.config = config;
@@ -73,7 +73,7 @@ public class Spind {
                 // 1) group by relation
                 List<MergeJob> groupedMergeJobs = new ArrayList<>();
                 for (int i = 0; i < relationMetadata.length; i++) {
-                    groupedMergeJobs.add(new MergeJob(new ArrayList<>(), i, null));
+                    groupedMergeJobs.add(new MergeJob(new ArrayList<>(), i, null, false));
                 }
                 for (MergeJob mergeJob : mergeJobs) {
                     groupedMergeJobs.get(mergeJob.relationId()).chunkPaths().addAll(mergeJob.chunkPaths());
@@ -92,14 +92,14 @@ public class Spind {
                         List<Path> nextPaths = new ArrayList<>();
                         for (int i = 0; i < n; i += mergeSize) {
                             Path resultPath = Path.of(job.chunkPaths().get(i) + "_m_" + i + ".txt");
-                            currentJobs.add(new MergeJob(new ArrayList<>(job.chunkPaths().subList(i, Math.min(i+ mergeSize,n))), job.relationId(), resultPath));
+                            currentJobs.add(new MergeJob(new ArrayList<>(job.chunkPaths().subList(i, Math.min(i+ mergeSize,n))), job.relationId(), resultPath, false));
                             nextPaths.add(resultPath);
                         }
-                        nextJobs.add(new MergeJob(nextPaths, job.relationId(), null));
+                        nextJobs.add(new MergeJob(nextPaths, job.relationId(), null, false));
                     }
                     else {
                         Path resultPath = Path.of(config.tempFolder + File.separator + "relation_" + job.relationId() + ".txt");
-                        currentJobs.add(new MergeJob(job.chunkPaths(), job.relationId(), resultPath));
+                        currentJobs.add(new MergeJob(job.chunkPaths(), job.relationId(), resultPath, true));
                     }
                 }
 
@@ -109,7 +109,7 @@ public class Spind {
                         return;
                     }
                     Merger merger = new Merger();
-                    merger.merge(mergeJob.chunkPaths(), mergeJob.to(), finalAttributes);
+                    merger.merge(mergeJob.chunkPaths(), mergeJob.to(), finalAttributes, mergeJob.isFinal());
                 });
                 mergeJobs = nextJobs;
             }
@@ -127,8 +127,7 @@ public class Spind {
             int unary = candidates.current.keySet().stream().mapToInt(x -> candidates.current.get(x).size()).sum();
             logger.info("Found " + unary + " pINDs at level " + candidates.layer);
 
-            // output.storePINDs(candidates, inputs, attributes);
-            // 3.3) Clean up files.
+            if (candidates.layer == 3) break;
 
             // 3.4) Generate new attributes for next layer.
             clock.start("generateNext");
