@@ -1,11 +1,13 @@
 package structures;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 public class Clock {
 
     HashMap<String, Long> clocks;
-    HashMap<String, Long> measures;
+    HashMap<String, List<Long>> measures;
 
     public Clock() {
         clocks = new HashMap<>();
@@ -29,6 +31,8 @@ public class Clock {
      */
     public long stop(String identifier) {
         long timeToAdd = System.currentTimeMillis() - clocks.remove(identifier);
-        return measures.compute(identifier, (k, v) -> v == null ? timeToAdd : v + timeToAdd);
+        List<Long> measure = measures.computeIfAbsent(identifier, k -> new ArrayList<>());
+        measure.add(timeToAdd);
+        return timeToAdd;
     }
 }
