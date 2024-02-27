@@ -41,8 +41,6 @@ public class Config {
                         "dress-up", "fencing", "fish", "floors", "fossils", "headwear", "housewares", "insects",
                         "miscellaneous", "music", "other", "photos", "posters", "reactions", "recipes", "rugs", "shoes",
                         "socks", "tools", "tops", "umbrellas", "villagers", "wall-mounted", "wallpaper"};
-                this.separator = ',';
-                this.inputFileHasHeader = true;
             }
             case TPCH_1 -> {
                 this.databaseName = "TPCH_1";
