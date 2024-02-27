@@ -74,7 +74,7 @@ public class Sorter {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return new MergeJob(spilledFiles, sortJob.relationId(), false);
+        return new MergeJob(spilledFiles, sortJob.relationId(), null);
     }
 
     /**
