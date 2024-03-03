@@ -4,6 +4,7 @@ import com.opencsv.CSVParserBuilder;
 import com.opencsv.CSVReader;
 import com.opencsv.CSVReaderBuilder;
 import com.opencsv.exceptions.CsvValidationException;
+import org.fastfilter.cuckoo.Cuckoo8;
 import runner.Config;
 import structures.Attribute;
 import structures.SortJob;
@@ -13,7 +14,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 public class RelationalInput {
@@ -87,7 +87,7 @@ public class RelationalInput {
      * Builds the string representation for every attribute combination of the given table and updates the attributes
      * accordingly.
      */
-    public void updateAttributeCombinations() {
+    public void updateAttributeCombinations(Cuckoo8 filter, int layer) {
         String[] values = next();
 
         for (Attribute a : attributes) {
@@ -95,15 +95,24 @@ public class RelationalInput {
 
             // TODO: Different Null-handling options
             boolean skipValue = false;
+            boolean globalUnique = false;
             for (int column : containedColumns) {
                 if (values[column] == null) {
                     skipValue = true;
+                    break;
+                }
+                if (layer > 1 && !filter.mayContain(values[column].hashCode())) {
+                    skipValue = true;
+                    globalUnique = true;
                     break;
                 }
 
             }
             if (skipValue) {
                 a.setCurrentValue(null);
+                if (globalUnique) {
+                    a.getMetadata().globalUnique++;
+                }
                 continue;
             }
 

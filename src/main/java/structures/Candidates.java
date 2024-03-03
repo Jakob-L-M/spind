@@ -10,7 +10,6 @@ import java.util.*;
  */
 public class Candidates {
     public Map<Integer, HashMap<Integer, Long>> current; //TODO use a single link list instead of an inner HashMap
-    public int layer = 0;
     HashMap<Integer, HashMap<Integer, HashMap<Integer, List<Integer>>>> unary;
     private int nextAttributeId;
     private final Logger logger = LoggerFactory.getLogger(Candidates.class);
@@ -46,7 +45,7 @@ public class Candidates {
      *
      * @return A list of all Attributes, which are present in at least one candidate pair.
      */
-    public Attribute[] generateNextLayer(Attribute[] attributes, RelationMetadata[] relationMetadata) {
+    public Attribute[] generateNextLayer(Attribute[] attributes, RelationMetadata[] relationMetadata, int layer) {
         HashMap<String, Set<String>> lookUp;
         if (layer == 1) {
             // safe unary attributes
@@ -109,7 +108,7 @@ public class Candidates {
                         int[] referencedColumns = Arrays.copyOf(naryRefAttribute.containedColumns, layer + 1);
                         referencedColumns[layer] = unaryRefColumn;
 
-                        if (layer > 1 && !possibleCandidate(dependantColumns, referencedColumns, depRelationId, refRelationId, lookUp)) {
+                        if (layer > 1 && !possibleCandidate(dependantColumns, referencedColumns, depRelationId, refRelationId, lookUp, layer)) {
                             continue;
                         }
 
@@ -147,7 +146,7 @@ public class Candidates {
         return lookup;
     }
 
-    private boolean possibleCandidate(int[] dependantColumns, int[] referencedColumns, int depRelationId, int refRelationId, HashMap<String, Set<String>> lookup) {
+    private boolean possibleCandidate(int[] dependantColumns, int[] referencedColumns, int depRelationId, int refRelationId, HashMap<String, Set<String>> lookup, int layer) {
         // a candidate can only be valid, if all included partitions of size-1 have been validated.
         // we do not need to skip the last position, since that one is always possible
         for (int skipIndex = 0; skipIndex < layer; skipIndex++) {
@@ -255,5 +254,27 @@ public class Candidates {
             }
             current.put(dependantAttribute.id, dependantMap);
         }
+    }
+
+    public void pruneGlobalUnique(Attribute[] attributes) {
+        int numPruned = 0;
+        for (int dependantId : current.keySet()) {
+            long depGlobalUnique = attributes[dependantId].getMetadata().globalUnique;
+
+            if (depGlobalUnique == 0L) {
+                continue;
+            }
+
+            HashMap<Integer, Long> refMap = current.get(dependantId);
+            Iterator<Integer> referred = refMap.keySet().iterator();
+            while (referred.hasNext()) {
+                int referredId = referred.next();
+                if (refMap.compute(referredId, (k ,v) -> v - depGlobalUnique) < 0) {
+                    referred.remove();
+                    numPruned++;
+                }
+            }
+        }
+        logger.info("Pruned " + numPruned + " candidates through global uniqueness.");
     }
 }

@@ -1,5 +1,6 @@
 package io;
 
+import org.fastfilter.cuckoo.Cuckoo8;
 import runner.Config;
 import structures.Attribute;
 import structures.Candidates;
@@ -19,6 +20,7 @@ public class Validator {
     Queue<Entry> topValues;
     BufferedReader[] readers;
     List<Integer> readersInTopValues;
+    String currentValue;
 
     public Validator(Config config, Attribute[] attributeIndex, Candidates candidates) throws IOException {
         this.config = config;
@@ -29,13 +31,31 @@ public class Validator {
         initReaders(attributeIndex);
     }
 
-    public void validate() throws IOException {
+    public void validate(int layer, Cuckoo8 filter) throws IOException {
+
+        if (layer > 1) {
+            candidates.pruneGlobalUnique(attributeIndex);
+        }
+
         HashMap<Integer, Long> valueGroup = loadNextGroup();
+        long nonUnique = 0;
+        long unique = 0;
         while (valueGroup != null) {
+            if (valueGroup.size() == 1) {
+                unique++;
+            } else {
+                nonUnique++;
+                if (layer == 1) {
+                    long hash = currentValue.hashCode();
+                    filter.insert(hash);
+                }
+            }
+
             candidates.prune(valueGroup);
             updateTopValues();
             valueGroup = loadNextGroup();
         }
+        System.out.println("Global unique values: " + unique + ". Global nun-unique values:" + nonUnique);
     }
 
     private void updateTopValues() throws IOException {
@@ -56,6 +76,7 @@ public class Validator {
             readersInTopValues.add(inGroup.getReaderNumber());
             valueGroup.putAll(inGroup.getConnectedAttributes());
         }
+        currentValue = firstEntry.getValue();
         return valueGroup;
     }
 

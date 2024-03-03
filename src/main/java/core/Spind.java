@@ -4,6 +4,7 @@ import io.Merger;
 import io.Output;
 import io.Sorter;
 import io.Validator;
+import org.fastfilter.cuckoo.Cuckoo8;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import runner.Config;
@@ -19,14 +20,16 @@ import java.util.Collections;
 import java.util.List;
 
 public class Spind {
+    private final Cuckoo8 filter;
     Config config;
     Logger logger;
     Output output;
     Clock clock;
     RelationMetadata[] relationMetadata;
     int mergeSize = 25;
-    int sortSize = 100_000;
+    int sortSize = 500_000;
     int chunkSize = 200_000;
+    int layer;
 
     public Spind(Config config) {
         this.config = config;
@@ -34,9 +37,12 @@ public class Spind {
         this.clock = new Clock();
         this.logger = LoggerFactory.getLogger(Spind.class);
         clock.start("total");
+        this.filter = new Cuckoo8(10_000_000);
     }
 
     public void execute() throws IOException {
+
+        logger.info("Starting execution");
 
         clock.start("init");
         this.relationMetadata = initializeRelations(chunkSize);
@@ -52,21 +58,32 @@ public class Spind {
 
         // 3) while attributes not empty.
         while (attributes.length > 0) {
-            candidates.layer++;
+            layer++;
 
             // create sort jobs
             attachAttributes(attributes);
             List<SortJob> sortJobs = createSortJobs();
 
-            logger.info("Starting layer: " + candidates.layer + " with " + attributes.length + " attributes forming " + candidates.current.keySet().stream().mapToInt(x -> candidates.current.get(x).size()).sum() + " candidates");
+            logger.info("Starting layer: " + layer + " with " + attributes.length + " attributes forming " + candidates.current.keySet().stream().mapToInt(x -> candidates.current.get(x).size()).sum() + " candidates");
             // 3.1) Load all attributes of the candidates.
             clock.start("sorting");
-            List<MergeJob> mergeJobs = sortJobs.parallelStream().map(sortJob -> {
+            List<SortResult> sortResults = sortJobs.parallelStream().map(sortJob -> {
                         Sorter sorter = new Sorter(sortSize);
-                        return sorter.process(sortJob, config);
+                        return sorter.process(sortJob, config, filter, layer);
                     }
             ).toList();
             logger.info("Finished sorting. Took: " + clock.stop("sorting") + "ms");
+
+            long totalSaved = 0;
+            for (SortResult sortResult : sortResults) {
+                for (Attribute sortAttribute : sortResult.connectedAttributes()) {
+                    attributes[sortAttribute.getId()].getMetadata().globalUnique += sortAttribute.getMetadata().globalUnique;
+                    totalSaved += sortAttribute.getMetadata().globalUnique;
+                }
+            }
+            logger.info("In total " + totalSaved + " lines where skipped due to global uniqueness");
+
+            List<MergeJob> mergeJobs = sortResults.stream().map(SortResult::mergeJob).toList();
 
             clock.start("merging");
             while (!mergeJobs.isEmpty()) {
@@ -118,20 +135,20 @@ public class Spind {
             // 3.2) Validate candidates.
             clock.start("validation");
             Validator validator = new Validator(config, attributes, candidates);
-            validator.validate();
+            validator.validate(layer, filter);
 
             // remove all dependant candidates, that do not reference any attribute
             candidates.cleanCandidates();
             logger.info("Finished validation. Took: " + clock.stop("validation") + "ms");
 
             int unary = candidates.current.keySet().stream().mapToInt(x -> candidates.current.get(x).size()).sum();
-            logger.info("Found " + unary + " pINDs at level " + candidates.layer);
+            logger.info("Found " + unary + " pINDs at level " + layer);
 
-            if (candidates.layer == 3) break;
+            if (layer == 3) break;
 
             // 3.4) Generate new attributes for next layer.
             clock.start("generateNext");
-            attributes = candidates.generateNextLayer(attributes, relationMetadata);
+            attributes = candidates.generateNextLayer(attributes, relationMetadata, layer);
             logger.info("Finished generating next layer. Took: " + clock.stop("generateNext") + "ms");
         }
 

@@ -96,7 +96,7 @@ public class Merger {
 
             if (isFinal) {
                 attributes[attribute].getMetadata().totalValues += occurrences;
-                attributes[attribute].getMetadata().uniqueValues += 1L;
+                attributes[attribute].getMetadata().uniqueValues++;
             }
         }
         containedAttributes.clear();

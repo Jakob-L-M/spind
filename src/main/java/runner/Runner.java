@@ -10,6 +10,7 @@ public class Runner {
         long startTime = System.currentTimeMillis();
         Config config = new Config(Config.Dataset.ANIMAL_CROSSING, 1.0);
 
+
         Spind spind = new Spind(config);
         spind.execute();
         System.out.println("Execution took: " + (System.currentTimeMillis() - startTime) + "ms");

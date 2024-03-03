@@ -1,11 +1,13 @@
 package io;
 
+import org.fastfilter.cuckoo.Cuckoo8;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import runner.Config;
 import structures.Attribute;
 import structures.MergeJob;
 import structures.SortJob;
+import structures.SortResult;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -36,7 +38,7 @@ public class Sorter {
     }
 
 
-    public MergeJob process(SortJob sortJob, Config config) {
+    public SortResult process(SortJob sortJob, Config config, Cuckoo8 filter, int layer) {
         spillCount = 0;
         spilledFiles = new ArrayList<>();
 
@@ -48,13 +50,12 @@ public class Sorter {
             return null;
         }
         while (input.hasNext()) {
-            input.updateAttributeCombinations();
+            input.updateAttributeCombinations(filter, layer);
             for (Attribute attribute : input.attributes) {
                 String value = attribute.getCurrentValue();
 
                 // TODO: add null-handling
                 if (value == null) continue;
-
 
                 values.computeIfAbsent(value, v -> new HashMap<>());
 
@@ -74,7 +75,7 @@ public class Sorter {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return new MergeJob(spilledFiles, sortJob.relationId(), null, false);
+        return new SortResult(new MergeJob(spilledFiles, sortJob.relationId(), null, false), input.attributes);
     }
 
     /**
