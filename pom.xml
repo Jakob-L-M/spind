@@ -26,6 +26,11 @@
             <artifactId>logback-classic</artifactId>
             <version>1.4.7</version>
         </dependency>
+        <dependency>
+            <groupId>io.github.fastfilter</groupId>
+            <artifactId>fastfilter</artifactId>
+            <version>1.0.2</version>
+        </dependency>
     </dependencies>
 
     <scm>
