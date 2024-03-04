@@ -81,22 +81,36 @@ public class Merger {
     }
 
     private void writeValue(HashMap<Integer, Long> containedAttributes, Attribute[] attributes, BufferedWriter output, Entry previous, boolean isFinal) throws IOException {
-        // there are multiple attribute in the group
-        previous.load(); // add the last member
-        previous.getConnectedAttributes().forEach((k, v) -> containedAttributes.merge(k, v, Long::sum));
         output.write(previous.getValue());
         output.write('-'); // delimiter between value and connected attributes
-        for (Integer attribute : containedAttributes.keySet()) {
-            long occurrences = containedAttributes.get(attribute);
 
-            output.write(String.valueOf(attribute));
-            output.write(','); // attribute-occurrence separator
-            output.write(String.valueOf(occurrences));
-            output.write(';'); // attribute-attribute separator
-
+        if (containedAttributes.isEmpty()) {
+            output.write(previous.getSerializedAttributes());
             if (isFinal) {
-                attributes[attribute].getMetadata().totalValues += occurrences;
-                attributes[attribute].getMetadata().uniqueValues++;
+                previous.load();
+                for (Integer attribute : previous.getConnectedAttributes().keySet()) {
+                    long occurrences = previous.getConnectedAttributes().get(attribute);
+                    attributes[attribute].getMetadata().totalValues += occurrences;
+                    attributes[attribute].getMetadata().uniqueValues++;
+                }
+            }
+        } else {
+
+            // there are multiple attribute in the group
+            previous.load(); // add the last member
+            previous.getConnectedAttributes().forEach((k, v) -> containedAttributes.merge(k, v, Long::sum));
+            for (Integer attribute : containedAttributes.keySet()) {
+                long occurrences = containedAttributes.get(attribute);
+
+                output.write(String.valueOf(attribute));
+                output.write(','); // attribute-occurrence separator
+                output.write(String.valueOf(occurrences));
+                output.write(';'); // attribute-attribute separator
+
+                if (isFinal) {
+                    attributes[attribute].getMetadata().totalValues += occurrences;
+                    attributes[attribute].getMetadata().uniqueValues++;
+                }
             }
         }
         containedAttributes.clear();
