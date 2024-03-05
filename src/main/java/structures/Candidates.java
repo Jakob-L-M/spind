@@ -31,7 +31,12 @@ public class Candidates {
                 // the attribute does not depend on any other attribute.
                 continue;
             }
-            long occurrences = valueGroup.get(dependantAttributeId);
+            long occurrences;
+            if (config.duplicateHandling == Config.DuplicateHandling.AWARE) {
+                occurrences = valueGroup.get(dependantAttributeId);
+            } else {
+                occurrences = 1L;
+            }
             HashMap<Integer, Long> referenced = current.get(dependantAttributeId);
             for (int referencedAttributeId : referenced.keySet().stream().toList()) {
                 // if the valueGroup includes the referenced Attribute: no violation
@@ -257,7 +262,7 @@ public class Candidates {
             for (Attribute referredAttribute : attributes) {
                 if (dependantAttribute.id == referredAttribute.id) continue;
 
-                dependantMap.put(referredAttribute.id, 0L);//dependantAttribute.metadata.possibleViolations);
+                dependantMap.put(referredAttribute.id, 0L);
             }
             current.put(dependantAttribute.id, dependantMap);
         }
@@ -302,7 +307,7 @@ public class Candidates {
                     if (config.nullHandling == Config.NullHandling.FOREIGN) {
                         if (refNull > 0) {
                             // foreign mode does not allow the referenced side to have any nulls
-                            refMap.remove(referredId);
+                            referred.remove();
                             numPruned++;
                         }
                     } else if (config.nullHandling == Config.NullHandling.INEQUALITY){
@@ -315,6 +320,24 @@ public class Candidates {
                 }
             }
         }
-        logger.info("Pruned " + numPruned + " candidates through global uniqueness.");
+        logger.info("Pruned " + numPruned + " candidates through null constraints.");
+    }
+
+    public void calculateViolations(Attribute[] attributes) {
+        for (int dependantId : current.keySet()) {
+            long depSize;
+
+            if (config.duplicateHandling == Config.DuplicateHandling.UNAWARE) {
+                depSize = attributes[dependantId].getMetadata().uniqueValues;
+            } else {
+                depSize = attributes[dependantId].getMetadata().totalValues;
+            }
+
+            long maxViolations = (long) ((1.0 - config.threshold) * depSize);
+
+            for (int refId : current.get(dependantId).keySet()) {
+                current.get(dependantId).put(refId, maxViolations);
+            }
+        }
     }
 }
