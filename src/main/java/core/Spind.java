@@ -28,7 +28,7 @@ public class Spind {
     RelationMetadata[] relationMetadata;
     int mergeSize = 25;
     int sortSize = 500_000;
-    int chunkSize = 200_000;
+    int chunkSize = 5_000_000;
     int layer;
 
     public Spind(Config config) {
@@ -48,7 +48,7 @@ public class Spind {
         this.relationMetadata = initializeRelations(chunkSize);
 
         // 1) init the helper Classes
-        Candidates candidates = new Candidates();
+        Candidates candidates = new Candidates(config);
 
         // 1) get all unary attributes.
         Attribute[] attributes = buildUnaryAttributes();
@@ -78,6 +78,7 @@ public class Spind {
             for (SortResult sortResult : sortResults) {
                 for (Attribute sortAttribute : sortResult.connectedAttributes()) {
                     attributes[sortAttribute.getId()].getMetadata().globalUnique += sortAttribute.getMetadata().globalUnique;
+                    attributes[sortAttribute.getId()].getMetadata().nullEntries += sortAttribute.getMetadata().nullEntries;
                     totalSaved += sortAttribute.getMetadata().globalUnique;
                 }
             }
@@ -171,13 +172,21 @@ public class Spind {
             relationMetadata[relationId] = new RelationMetadata(
                     config.tableNames[relationId],
                     relationId,
-                    chunkSize,
                     relationOffset,
                     Path.of(config.folderPath + File.separator + config.databaseName + File.separator + config.tableNames[relationId] + config.fileEnding),
                     config
             );
             relationOffset += relationMetadata[relationId].columnNames.length;
         }
+
+        Arrays.stream(relationMetadata).parallel().forEach(relation -> {
+            try {
+                relation.createChunks(chunkSize/relation.columnNames.length, config);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+
         return relationMetadata;
     }
 

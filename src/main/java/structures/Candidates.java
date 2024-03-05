@@ -2,6 +2,7 @@ package structures;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import runner.Config;
 
 import java.util.*;
 
@@ -9,10 +10,15 @@ import java.util.*;
  * Manages candidate creation and pruning.
  */
 public class Candidates {
+    private final Config config;
+    private final Logger logger = LoggerFactory.getLogger(Candidates.class);
     public Map<Integer, HashMap<Integer, Long>> current; //TODO use a single link list instead of an inner HashMap
     HashMap<Integer, HashMap<Integer, HashMap<Integer, List<Integer>>>> unary;
     private int nextAttributeId;
-    private final Logger logger = LoggerFactory.getLogger(Candidates.class);
+
+    public Candidates(Config config) {
+        this.config = config;
+    }
 
     /**
      * Prunes the current candidates
@@ -32,7 +38,7 @@ public class Candidates {
                 if (valueGroup.containsKey(referencedAttributeId)) continue;
 
                 // not null since we iterate over the key set
-                if (referenced.compute(referencedAttributeId, (k, v) -> v - occurrences) < 0) {
+                if (referenced.compute(referencedAttributeId, (k, v) -> v == null ? -1 : v - occurrences) < 0) {
                     referenced.remove(referencedAttributeId);
                 }
             }
@@ -166,13 +172,13 @@ public class Candidates {
 
                 attPointer++;
             }
-            depString.delete(depString.length()-2, depString.length()).append("]");
-            refString.delete(refString.length()-2, refString.length()).append("]");
+            depString.delete(depString.length() - 2, depString.length()).append("]");
+            refString.delete(refString.length() - 2, refString.length()).append("]");
 
             Set<String> refSet = lookup.get(depString.toString());
             if (refSet == null || !refSet.contains(refString.toString())) {
                 logger.debug("Skipped candidate. " + depRelationId + ": " + Arrays.toString(dependantColumns) + " -> "
-                + refRelationId + ": " + Arrays.toString(referencedColumns));
+                        + refRelationId + ": " + Arrays.toString(referencedColumns));
                 return false;
             }
         }
@@ -187,7 +193,8 @@ public class Candidates {
      * Stores the unary pINDs so that they can be used to expand the n-ary attributes in the higher layers.
      * Unary pINDs are stored as follows:
      * [RelationId] maps to -> [DependantColumn] maps to -> [RelationId of reference] contains list of column numbers.
-     *  @param attributes      The attribute index of all attributes with size 1.
+     *
+     * @param attributes       The attribute index of all attributes with size 1.
      * @param relationMetadata Metadata that is used to access the relation offsets
      */
     private void storeUnary(Attribute[] attributes, RelationMetadata[] relationMetadata) {
@@ -269,9 +276,42 @@ public class Candidates {
             Iterator<Integer> referred = refMap.keySet().iterator();
             while (referred.hasNext()) {
                 int referredId = referred.next();
-                if (refMap.compute(referredId, (k ,v) -> v - depGlobalUnique) < 0) {
+                if (refMap.compute(referredId, (k, v) -> v == null ? -1 : v - depGlobalUnique) < 0) {
                     referred.remove();
                     numPruned++;
+                }
+            }
+        }
+        logger.info("Pruned " + numPruned + " candidates through global uniqueness.");
+    }
+
+    public void pruneNull(Attribute[] attributes) {
+        int numPruned = 0;
+        // in subset and equality mode, we do not need to do anything
+        if (config.nullHandling != Config.NullHandling.SUBSET && config.nullHandling != Config.NullHandling.EQUALITY) {
+
+            for (int dependantId : current.keySet()) {
+                long depNull = attributes[dependantId].getMetadata().nullEntries;
+
+                HashMap<Integer, Long> refMap = current.get(dependantId);
+                Iterator<Integer> referred = refMap.keySet().iterator();
+                while (referred.hasNext()) {
+                    int referredId = referred.next();
+                    long refNull = attributes[referredId].getMetadata().nullEntries;
+
+                    if (config.nullHandling == Config.NullHandling.FOREIGN) {
+                        if (refNull > 0) {
+                            // foreign mode does not allow the referenced side to have any nulls
+                            refMap.remove(referredId);
+                            numPruned++;
+                        }
+                    } else if (config.nullHandling == Config.NullHandling.INEQUALITY){
+                        // Inequality mode: every null is different. Therefor all depNulls are violations
+                        if(refMap.compute(referredId, (k, v) -> v == null ? -1 : v - depNull) < 0) {
+                            referred.remove();
+                            numPruned++;
+                        }
+                    }
                 }
             }
         }

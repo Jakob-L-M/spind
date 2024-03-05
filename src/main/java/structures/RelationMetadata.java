@@ -22,17 +22,19 @@ public class RelationMetadata {
 
     public final int relationId;
     public final List<Path> chunks;
+    private final RelationalInput relationalInput;
     public String[] columnNames;
     public final String relationName;
     public final int relationOffset;
     public List<Attribute> connectedAttributes;
 
-    public RelationMetadata(String relationName, int relationId, int maxChunkSize, int relationOffset, Path relationPath, Config config) throws IOException {
+    public RelationMetadata(String relationName, int relationId, int relationOffset, Path relationPath, Config config) throws IOException {
         this.chunks = new ArrayList<>();
         this.relationName = relationName;
         this.relationId = relationId;
         this.relationOffset = relationOffset;
-        createChunks(maxChunkSize, relationPath, config);
+        this.relationalInput = new RelationalInput(relationPath, config);
+        this.columnNames = relationalInput.headerLine;
     }
 
     /**
@@ -41,10 +43,7 @@ public class RelationMetadata {
      *
      * @param maxSize The maximal number of lines each chunk should contain.
      */
-    private void createChunks(int maxSize, Path relationPath, Config config) throws IOException {
-        RelationalInput relationalInput = new RelationalInput(relationPath, config);
-        this.columnNames = relationalInput.headerLine;
-
+    public void createChunks(int maxSize, Config config) throws IOException {
         int chunkNum = 0;
         Path chunkPath = Path.of(config.tempFolder + File.separator + "r_" + relationId + "_c_" + chunkNum + ".txt");
         BufferedWriter chunkWriter = Files.newBufferedWriter(chunkPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);

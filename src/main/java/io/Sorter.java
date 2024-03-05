@@ -54,8 +54,10 @@ public class Sorter {
             for (Attribute attribute : input.attributes) {
                 String value = attribute.getCurrentValue();
 
-                // TODO: add null-handling
-                if (value == null) continue;
+                if (value == null) {
+                    attribute.getMetadata().nullEntries++;
+                    continue;
+                }
 
                 values.computeIfAbsent(value, v -> new HashMap<>());
 

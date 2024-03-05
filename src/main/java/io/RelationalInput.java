@@ -93,7 +93,6 @@ public class RelationalInput {
         for (Attribute a : attributes) {
             int[] containedColumns = a.getContainedColumns();
 
-            // TODO: Different Null-handling options
             boolean skipValue = false;
             boolean globalUnique = false;
             for (int column : containedColumns) {
@@ -201,7 +200,7 @@ public class RelationalInput {
         if (lineArray == null) {
             return null;
         }
-        replaceNull(lineArray);
+        replaceNullAndEscape(lineArray);
         return lineArray;
     }
 
@@ -210,10 +209,13 @@ public class RelationalInput {
      *
      * @param lineArray The array of values to be processed
      */
-    private void replaceNull(String[] lineArray) {
+    private void replaceNullAndEscape(String[] lineArray) {
         for (int i = 0; i < lineArray.length; i++) {
             if (lineArray[i].equals(config.nullString)) {
-                lineArray[i] = null;
+                if (config.nullHandling != Config.NullHandling.EQUALITY) {
+                    // in equality mode, we treat every null entry as the same exact value
+                    lineArray[i] = null;
+                }
             } else if (!chunkReader) {
                 lineArray[i] = lineArray[i].replace('\n', '\0');
             }
