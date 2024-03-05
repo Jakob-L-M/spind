@@ -33,6 +33,8 @@ public class Validator {
 
     public void validate(int layer, Cuckoo8 filter) {
 
+        candidates.calculateViolations(attributeIndex);
+
         candidates.pruneNull(attributeIndex);
 
         if (layer > 1) {
