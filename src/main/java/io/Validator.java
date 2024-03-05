@@ -19,63 +19,71 @@ public class Validator {
     Candidates candidates;
     Queue<Entry> topValues;
     BufferedReader[] readers;
-    List<Integer> readersInTopValues;
+    List<Integer> valueGroupReaders;
     String currentValue;
 
     public Validator(Config config, Attribute[] attributeIndex, Candidates candidates) throws IOException {
         this.config = config;
         this.attributeIndex = attributeIndex;
         this.candidates = candidates;
-        this.readersInTopValues = new ArrayList<>();
+        this.valueGroupReaders = new ArrayList<>();
         topValues = new PriorityQueue<>();
         initReaders(attributeIndex);
     }
 
-    public void validate(int layer, Cuckoo8 filter) throws IOException {
+    public void validate(int layer, Cuckoo8 filter) {
 
         if (layer > 1) {
             candidates.pruneGlobalUnique(attributeIndex);
         }
 
         HashMap<Integer, Long> valueGroup = loadNextGroup();
-        long nonUnique = 0;
-        long unique = 0;
-        while (valueGroup != null) {
-            if (valueGroup.size() == 1) {
-                unique++;
-            } else {
-                nonUnique++;
-                if (layer == 1) {
-                    long hash = currentValue.hashCode();
-                    filter.insert(hash);
-                }
-            }
 
+        while (valueGroup != null) {
+            if (layer == 1 && valueGroup.size() > 1) {
+                long hash = currentValue.hashCode();
+                filter.insert(hash);
+            }
             candidates.prune(valueGroup);
             updateTopValues();
             valueGroup = loadNextGroup();
         }
-        System.out.println("Global unique values: " + unique + ". Global nun-unique values:" + nonUnique);
     }
 
-    private void updateTopValues() throws IOException {
-        for (int reader : readersInTopValues) {
-            updateReader(reader);
-        }
-        readersInTopValues.clear();
+    /**
+     * updates every reader that was used in last value group
+     */
+    private void updateTopValues() {
+        // load the new values in parallel
+        valueGroupReaders.forEach(this::updateReader);
+
+        // clear the current top values
+        valueGroupReaders.clear();
     }
 
-    public HashMap<Integer, Long> loadNextGroup() {
+    /**
+     * will load the next value group using the topValue pointers
+     *
+     * @return A Map of all included attribute id's with their occurrences
+     */
+    private HashMap<Integer, Long> loadNextGroup() {
+
+        // if the topValues are empty, the validation is complete
         if (topValues.isEmpty()) return null;
 
+        // poll the first entry. This entry will be used to expand the topValue group
         Entry firstEntry = topValues.poll();
-        readersInTopValues.add(firstEntry.getReaderNumber());
+        valueGroupReaders.add(firstEntry.getReaderNumber());
         HashMap<Integer, Long> valueGroup = firstEntry.getConnectedAttributes();
+
+        // add all readers which have the same top value
         while (topValues.peek() != null && topValues.peek().equals(firstEntry)) {
-            Entry inGroup = topValues.poll();
-            readersInTopValues.add(inGroup.getReaderNumber());
-            valueGroup.putAll(inGroup.getConnectedAttributes());
+            Entry partOfValueGroup = topValues.poll();
+            valueGroupReaders.add(partOfValueGroup.getReaderNumber());
+            valueGroup.putAll(partOfValueGroup.getConnectedAttributes());
         }
+
+        // set the current value
         currentValue = firstEntry.getValue();
         return valueGroup;
     }
@@ -89,8 +97,14 @@ public class Validator {
         }
     }
 
-    private void updateReader(int readerNumber) throws IOException {
-        String nextLine = readers[readerNumber].readLine();
+    private void updateReader(int readerNumber) {
+        String nextLine;
+        try {
+            nextLine = readers[readerNumber].readLine();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return;
+        }
         if (nextLine == null) return;
         Entry toAdd = new Entry(nextLine, readerNumber);
         toAdd.load();
