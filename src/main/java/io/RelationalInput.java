@@ -72,7 +72,7 @@ public class RelationalInput {
 
         BufferedReader reader = Files.newBufferedReader(sortJob.chunkPath());
 
-        this.CSVReader = new CSVReader(reader);
+        this.CSVReader = new CSVReaderBuilder(reader).withCSVParser(new CSVParserBuilder().withQuoteChar(config.quoteChar).build()).build();
 
         // read the first line
         this.nextLine = readNextLine();
@@ -218,6 +218,9 @@ public class RelationalInput {
                 }
             } else if (!chunkReader) {
                 lineArray[i] = lineArray[i].replace('\n', '\0');
+                if (config.quoteChar != '"') {
+                    lineArray[i] = lineArray[i].replace("\"", "'");
+                }
             }
         }
     }
