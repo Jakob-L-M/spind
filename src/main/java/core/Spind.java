@@ -26,7 +26,7 @@ public class Spind {
     Output output;
     Clock clock;
     RelationMetadata[] relationMetadata;
-    int mergeSize = 25;
+    int mergeSize = 50;
     int sortSize = 500_000;
     int chunkSize = 5_000_000;
     int layer;
@@ -145,7 +145,7 @@ public class Spind {
             int unary = candidates.current.keySet().stream().mapToInt(x -> candidates.current.get(x).size()).sum();
             logger.info("Found " + unary + " pINDs at level " + layer);
 
-            if (layer == 3) break;
+            if (layer == 1) break;
 
             // 3.4) Generate new attributes for next layer.
             clock.start("generateNext");
@@ -158,6 +158,7 @@ public class Spind {
             for (Path chunk : relation.chunks) {
                 Files.delete(chunk);
             }
+            Files.delete(Path.of(config.tempFolder + File.separator + "relation_" + relation.relationId + ".txt"));
         }
 
         // 4) Save the output
@@ -179,13 +180,18 @@ public class Spind {
             relationOffset += relationMetadata[relationId].columnNames.length;
         }
 
+        clock.start("chunking");
+        logger.info("Stating chunking");
         Arrays.stream(relationMetadata).parallel().forEach(relation -> {
+            long sTime = System.currentTimeMillis();
             try {
                 relation.createChunks(chunkSize/relation.columnNames.length, config);
             } catch (IOException e) {
                 e.printStackTrace();
-            }
+            };
+            logger.debug("Finished " + relation.relationName + " (" + (System.currentTimeMillis() - sTime) + "ms)");
         });
+        logger.info("Finished chunking. Took: " + clock.stop("chunking"));
 
         return relationMetadata;
     }
