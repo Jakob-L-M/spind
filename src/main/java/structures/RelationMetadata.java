@@ -22,10 +22,10 @@ public class RelationMetadata {
 
     public final int relationId;
     public final List<Path> chunks;
-    private final RelationalInput relationalInput;
-    public String[] columnNames;
     public final String relationName;
     public final int relationOffset;
+    private final RelationalInput relationalInput;
+    public String[] columnNames;
     public List<Attribute> connectedAttributes;
 
     public RelationMetadata(String relationName, int relationId, int relationOffset, Path relationPath, Config config) throws IOException {
@@ -47,7 +47,7 @@ public class RelationMetadata {
         int chunkNum = 0;
         Path chunkPath = Path.of(config.tempFolder + File.separator + "r_" + relationId + "_c_" + chunkNum + ".txt");
         BufferedWriter chunkWriter = Files.newBufferedWriter(chunkPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
-        CSVWriter  csvWriter = new CSVWriter(chunkWriter);
+        CSVWriter csvWriter = new CSVWriter(chunkWriter);
         chunks.add(chunkPath);
         int chunkSize = 0;
 
