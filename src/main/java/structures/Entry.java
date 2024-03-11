@@ -18,11 +18,10 @@ class Entry implements Comparable<Entry> {
     private HashMap<Integer, Long> connectedAttributes;
 
 
-    public Entry(final String rawLine, final int readerNumber) {
-        String[] parts = rawLine.split("-");
-        this.value = String.join("-", Arrays.copyOf(parts, parts.length - 1));
+    public Entry(final String value, String serializedAttributes, final int readerNumber) {
+        this.value = value;
         this.readerNumber = readerNumber;
-        this.serializedAttributes = parts[parts.length - 1];
+        this.serializedAttributes = serializedAttributes;
     }
 
     /**

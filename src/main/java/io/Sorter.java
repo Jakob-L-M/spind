@@ -101,7 +101,7 @@ public class Sorter {
 
             for (String value : values.keySet().stream().sorted().toList()) {
                 bw.write(value);
-                bw.write('-'); // identifier, where the value ends
+                bw.newLine(); // identifier, where the value ends
                 Map<Integer, Long> attributesToOccurrences = values.get(value);
                 for (Integer attribute : attributesToOccurrences.keySet()) {
                     long occurrences = attributesToOccurrences.get(attribute);

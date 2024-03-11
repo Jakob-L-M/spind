@@ -26,7 +26,7 @@ public class Merger {
             this.readers[index] = reader;
             String firstLine = reader.readLine();
             if (firstLine != null) {
-                this.headValues.add(new Entry(firstLine, index));
+                this.headValues.add(new Entry(firstLine, reader.readLine(), index));
             }
         }
 
@@ -76,13 +76,13 @@ public class Merger {
         String nextLine = this.readers[readerNumber].readLine();
 
         if (nextLine != null) {
-            this.headValues.add(new Entry(nextLine, readerNumber));
+            this.headValues.add(new Entry(nextLine, this.readers[readerNumber].readLine(), readerNumber));
         }
     }
 
     private void writeValue(HashMap<Integer, Long> containedAttributes, Attribute[] attributes, BufferedWriter output, Entry previous, boolean isFinal) throws IOException {
         output.write(previous.getValue());
-        output.write('-'); // delimiter between value and connected attributes
+        output.newLine(); // delimiter between value and connected attributes
 
         if (containedAttributes.isEmpty()) {
             output.write(previous.getSerializedAttributes());
