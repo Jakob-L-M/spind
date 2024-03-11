@@ -37,7 +37,7 @@ public class Spind {
         this.clock = new Clock();
         this.logger = LoggerFactory.getLogger(Spind.class);
         clock.start("total");
-        this.filter = new Cuckoo8(10_000_000);
+        this.filter = new Cuckoo8(100_000_000);
     }
 
     public void execute() throws IOException {
@@ -188,7 +188,7 @@ public class Spind {
                 relation.createChunks(chunkSize/relation.columnNames.length, config);
             } catch (IOException e) {
                 e.printStackTrace();
-            };
+            }
             logger.debug("Finished " + relation.relationName + " (" + (System.currentTimeMillis() - sTime) + "ms)");
         });
         logger.info("Finished chunking. Took: " + clock.stop("chunking"));

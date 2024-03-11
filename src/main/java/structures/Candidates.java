@@ -12,7 +12,7 @@ import java.util.*;
 public class Candidates {
     private final Config config;
     private final Logger logger = LoggerFactory.getLogger(Candidates.class);
-    public Map<Integer, HashMap<Integer, Long>> current; //TODO use a single link list instead of an inner HashMap
+    public Map<Integer, PINDList> current;
     HashMap<Integer, HashMap<Integer, HashMap<Integer, List<Integer>>>> unary;
     private int nextAttributeId;
 
@@ -25,7 +25,7 @@ public class Candidates {
      *
      * @param valueGroup the group of attributes which all share some value.
      */
-    public void prune(HashMap<Integer, Long> valueGroup) {
+    public void prune(Map<Integer, Long> valueGroup) {
         for (int dependantAttributeId : valueGroup.keySet()) {
             if (!current.containsKey(dependantAttributeId)) {
                 // the attribute does not depend on any other attribute.
@@ -37,17 +37,18 @@ public class Candidates {
             } else {
                 occurrences = 1L;
             }
-            HashMap<Integer, Long> referenced = current.get(dependantAttributeId);
-            for (int referencedAttributeId : referenced.keySet().stream().toList()) {
+            PINDList.PINDIterator referenced = current.get(dependantAttributeId).elementIterator();
+            while (referenced.hasNext()){
+                PINDList.PINDElement referencedAttribute = referenced.next();
                 // if the valueGroup includes the referenced Attribute: no violation
-                if (valueGroup.containsKey(referencedAttributeId)) continue;
+                if (valueGroup.containsKey(referencedAttribute.referenced)) continue;
 
                 // not null since we iterate over the key set
-                if (referenced.compute(referencedAttributeId, (k, v) -> v == null ? -1 : v - occurrences) < 0) {
-                    referenced.remove(referencedAttributeId);
+                if (referencedAttribute.violate(occurrences) < 0) {
+                    referenced.remove();
                 }
             }
-            if (referenced.isEmpty()) current.remove(dependantAttributeId);
+            if (current.get(dependantAttributeId).isEmpty()) current.remove(dependantAttributeId);
         }
     }
 
@@ -67,7 +68,7 @@ public class Candidates {
         }
         // generate next layer by the method proposed in the BINDER paper
         HashMap<Attribute, Integer> nextAttributes = new HashMap<>();
-        HashMap<Integer, HashMap<Integer, Long>> nextCandidates = new HashMap<>();
+        HashMap<Integer, PINDList> nextCandidates = new HashMap<>();
         this.nextAttributeId = 0;
         for (int naryDepId : current.keySet()) {
             Attribute naryDepAttribute = attributes[naryDepId];
@@ -84,7 +85,9 @@ public class Candidates {
                     continue;
                 }
 
-                for (int naryRefId : current.get(naryDepId).keySet()) {
+                PINDList.PINDIterator naryRef = current.get(naryDepId).elementIterator();
+                while (naryRef.hasNext()) {
+                    int naryRefId = naryRef.next().referenced;
                     Attribute naryRefAttribute = attributes[naryRefId];
                     int refRelationId = naryRefAttribute.getRelationId();
 
@@ -128,8 +131,8 @@ public class Candidates {
 
                         Attribute referenced = generateAttribute(naryRefAttribute, unaryRefColumn, nextAttributes);
 
-                        nextCandidates.computeIfAbsent(dependant.getId(), k -> new HashMap<>());
-                        nextCandidates.get(dependant.getId()).put(referenced.getId(), 0L); // violations are handled elsewhere
+                        PINDList referencedList = nextCandidates.computeIfAbsent(dependant.getId(), k -> new PINDList());
+                        referencedList.add(referenced.getId(), 0); // violations are handled elsewhere
                     }
 
                 }
@@ -148,7 +151,9 @@ public class Candidates {
         for (int depId : current.keySet()) {
             String depString = attributes[depId].toString();
             HashSet<String> depSet = new HashSet<>();
-            for (int refId : current.get(depId).keySet()) {
+            PINDList.PINDIterator referencedList = current.get(depId).elementIterator();
+            while (referencedList.hasNext()){
+                int refId = referencedList.next().referenced;
                 String refString = attributes[refId].toString();
                 depSet.add(refString);
             }
@@ -217,7 +222,10 @@ public class Candidates {
 
             HashMap<Integer, List<Integer>> referredAttributes = new HashMap<>();
 
-            for (int referencedAttribute : current.get(dependentAttribute).keySet()) {
+            PINDList.PINDIterator referencedIterator = current.get(dependentAttribute).elementIterator();
+            while (referencedIterator.hasNext()){
+
+                int referencedAttribute = referencedIterator.next().referenced;
 
                 if (attributes[referencedAttribute].getMetadata().totalValues == 0) {
                     // do not safe attributes which are completely empty. They do not carry meaning.
@@ -257,14 +265,9 @@ public class Candidates {
      */
     public void loadUnary(Attribute[] attributes) {
         current = new HashMap<>(attributes.length);
+        List<Integer> attributeIds = Arrays.stream(attributes).map(Attribute::getId).toList();
         for (Attribute dependantAttribute : attributes) {
-            HashMap<Integer, Long> dependantMap = new HashMap<>();
-            for (Attribute referredAttribute : attributes) {
-                if (dependantAttribute.id == referredAttribute.id) continue;
-
-                dependantMap.put(referredAttribute.id, 0L);
-            }
-            current.put(dependantAttribute.id, dependantMap);
+            current.put(dependantAttribute.id, new PINDList(0L, attributeIds, dependantAttribute.getId()));
         }
     }
 
@@ -277,11 +280,10 @@ public class Candidates {
                 continue;
             }
 
-            HashMap<Integer, Long> refMap = current.get(dependantId);
-            Iterator<Integer> referred = refMap.keySet().iterator();
+            PINDList refMap = current.get(dependantId);
+            PINDList.PINDIterator referred = refMap.elementIterator();
             while (referred.hasNext()) {
-                int referredId = referred.next();
-                if (refMap.compute(referredId, (k, v) -> v == null ? -1 : v - depGlobalUnique) < 0) {
+                if (referred.next().violate(depGlobalUnique) < 0) {
                     referred.remove();
                     numPruned++;
                 }
@@ -298,22 +300,21 @@ public class Candidates {
             for (int dependantId : current.keySet()) {
                 long depNull = attributes[dependantId].getMetadata().nullEntries;
 
-                HashMap<Integer, Long> refMap = current.get(dependantId);
-                Iterator<Integer> referred = refMap.keySet().iterator();
-                while (referred.hasNext()) {
-                    int referredId = referred.next();
-                    long refNull = attributes[referredId].getMetadata().nullEntries;
+                PINDList.PINDIterator referenced = current.get(dependantId).elementIterator();
+                while (referenced.hasNext()) {
+                    PINDList.PINDElement ref = referenced.next();
+                    long refNull = attributes[ref.referenced].getMetadata().nullEntries;
 
                     if (config.nullHandling == Config.NullHandling.FOREIGN) {
                         if (refNull > 0) {
                             // foreign mode does not allow the referenced side to have any nulls
-                            referred.remove();
+                            referenced.remove();
                             numPruned++;
                         }
                     } else if (config.nullHandling == Config.NullHandling.INEQUALITY){
                         // Inequality mode: every null is different. Therefor all depNulls are violations
-                        if(refMap.compute(referredId, (k, v) -> v == null ? -1 : v - depNull) < 0) {
-                            referred.remove();
+                        if(ref.violate(depNull) < 0) {
+                            referenced.remove();
                             numPruned++;
                         }
                     }
@@ -335,8 +336,9 @@ public class Candidates {
 
             long maxViolations = (long) ((1.0 - config.threshold) * depSize);
 
-            for (int refId : current.get(dependantId).keySet()) {
-                current.get(dependantId).put(refId, maxViolations);
+            PINDList.PINDIterator referenced = current.get(dependantId).elementIterator();
+            while (referenced.hasNext()) {
+                referenced.next().violationsLeft = maxViolations;
             }
         }
     }
