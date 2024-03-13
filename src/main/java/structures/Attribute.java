@@ -12,6 +12,7 @@ public class Attribute {
     int[] containedColumns;
     String currentValue;
     long currentOccurrences;
+    PINDList referenced;
     Metadata metadata;
 
     public Attribute(int id, int relationId, int[] containedColumns) {

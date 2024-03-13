@@ -63,6 +63,17 @@ public class Validator {
             valueGroup = loadNextGroup();
         }
         System.out.println(unique + " | " + nonUnique);
+        closeReaders();
+    }
+
+    private void closeReaders() {
+        for (BufferedReader reader : readers) {
+            try {
+                reader.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     /**

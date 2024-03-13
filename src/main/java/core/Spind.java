@@ -64,7 +64,7 @@ public class Spind {
             attachAttributes(attributes);
             List<SortJob> sortJobs = createSortJobs();
 
-            logger.info("Starting layer: " + layer + " with " + attributes.length + " attributes forming " + candidates.current.keySet().stream().mapToInt(x -> candidates.current.get(x).size()).sum() + " candidates");
+            logger.info("Starting layer: " + layer + " with " + attributes.length + " attributes forming " + "TODO");// candidates.current.keySet().stream().mapToInt(x -> candidates.current.get(x).size()).sum() + " candidates");
             // 3.1) Load all attributes of the candidates.
             clock.start("sorting");
             List<SortResult> sortResults = sortJobs.parallelStream().map(sortJob -> {
@@ -142,8 +142,7 @@ public class Spind {
             candidates.cleanCandidates();
             logger.info("Finished validation. Took: " + clock.stop("validation") + "ms");
 
-            int unary = candidates.current.keySet().stream().mapToInt(x -> candidates.current.get(x).size()).sum();
-            logger.info("Found " + unary + " pINDs at level " + layer);
+            logger.info("Found " + calcINDs(attributes) + " pINDs at level " + layer);
 
             if (layer == 1) break;
 
@@ -163,6 +162,16 @@ public class Spind {
 
         // 4) Save the output
         output.storeMetadata(config, clock);
+    }
+
+    private int calcINDs(Attribute[] attributes) {
+        int total = 0;
+        for (Attribute attribute : attributes) {
+            if (attribute.getReferenced() != null) {
+                total += attribute.getReferenced().size();
+            }
+        }
+        return total;
     }
 
     private RelationMetadata[] initializeRelations(int chunkSize) throws IOException {
