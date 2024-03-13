@@ -2,20 +2,18 @@ package structures;
 
 import java.util.Collection;
 
+/**
+ * A PINDList is a single-linked list which stores pIND. The list is associated with some dependant attribute and stores the (open) referenced attributes with the respective
+ * remaining violations.
+ */
 public class PINDList {
 
-    private int except;
     private PINDElement first = null;
     private PINDElement last = null;
-    private Collection<Integer> seed;
-    private long initialViolations;
     private int size = 0;
 
-    public PINDList(long initialViolations, Collection<Integer> seed, int except) {
-        this.seed = seed;
-        this.except = except;
-        this.initialViolations = initialViolations;
-        initialize();
+    public PINDList(Collection<Integer> seed, int except) {
+        initialize(seed, except);
     }
 
     public PINDList() {
@@ -26,12 +24,11 @@ public class PINDList {
         return size;
     }
 
-    private void initialize() {
-        if (this.seed != null) {
-            for (int value : this.seed)
-                if (value != this.except)
-                    this.add(value, initialViolations);
-            this.seed = null;
+    private void initialize(Collection<Integer> seed, int except) {
+        for (int value : seed) {
+            if (value != except) {
+                this.add(value, 0L);
+            }
         }
     }
 
@@ -46,25 +43,41 @@ public class PINDList {
         size++;
     }
 
+    /**
+     * Check if there are still items remaining.
+     *
+     * @return True if there is no item in the list, False otherwise
+     */
     public boolean isEmpty() {
         return this.first == null;
     }
 
+    /**
+     * Use this function to iterate over the list and conditionally remove items if necessary.
+     *
+     * @return an PINDIterator which yields all PINDElements in the list one after another.
+     */
     public PINDIterator elementIterator() {
         return new PINDIterator();
     }
 
     public static class PINDElement {
 
-        public int referenced;
+        public int referencedId;
         public long violationsLeft;
-        public PINDElement next = null;
+        private PINDElement next = null;
 
         public PINDElement(int value, long violationsLeft) {
-            this.referenced = value;
+            this.referencedId = value;
             this.violationsLeft = violationsLeft;
         }
 
+        /**
+         * Use this method to reduce the open violations by some amount
+         *
+         * @param occurrences The number of occurrences which should be subtracted from the open violations.
+         * @return the remaining violations
+         */
         public long violate(long occurrences) {
             violationsLeft -= occurrences;
             return violationsLeft;

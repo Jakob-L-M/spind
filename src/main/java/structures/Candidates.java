@@ -41,7 +41,7 @@ public class Candidates {
             while (referenced.hasNext()){
                 PINDList.PINDElement referencedAttribute = referenced.next();
                 // if the valueGroup includes the referenced Attribute: no violation
-                if (valueGroup.containsKey(referencedAttribute.referenced)) continue;
+                if (valueGroup.containsKey(referencedAttribute.referencedId)) continue;
 
                 // not null since we iterate over the key set
                 if (referencedAttribute.violate(occurrences) < 0) {
@@ -87,7 +87,7 @@ public class Candidates {
 
                 PINDList.PINDIterator naryRef = current.get(naryDepId).elementIterator();
                 while (naryRef.hasNext()) {
-                    int naryRefId = naryRef.next().referenced;
+                    int naryRefId = naryRef.next().referencedId;
                     Attribute naryRefAttribute = attributes[naryRefId];
                     int refRelationId = naryRefAttribute.getRelationId();
 
@@ -153,7 +153,7 @@ public class Candidates {
             HashSet<String> depSet = new HashSet<>();
             PINDList.PINDIterator referencedList = current.get(depId).elementIterator();
             while (referencedList.hasNext()){
-                int refId = referencedList.next().referenced;
+                int refId = referencedList.next().referencedId;
                 String refString = attributes[refId].toString();
                 depSet.add(refString);
             }
@@ -225,7 +225,7 @@ public class Candidates {
             PINDList.PINDIterator referencedIterator = current.get(dependentAttribute).elementIterator();
             while (referencedIterator.hasNext()){
 
-                int referencedAttribute = referencedIterator.next().referenced;
+                int referencedAttribute = referencedIterator.next().referencedId;
 
                 if (attributes[referencedAttribute].getMetadata().totalValues == 0) {
                     // do not safe attributes which are completely empty. They do not carry meaning.
@@ -267,7 +267,7 @@ public class Candidates {
         current = new HashMap<>(attributes.length);
         List<Integer> attributeIds = Arrays.stream(attributes).map(Attribute::getId).toList();
         for (Attribute dependantAttribute : attributes) {
-            current.put(dependantAttribute.id, new PINDList(0L, attributeIds, dependantAttribute.getId()));
+            current.put(dependantAttribute.id, new PINDList(attributeIds, dependantAttribute.getId()));
         }
     }
 
@@ -303,7 +303,7 @@ public class Candidates {
                 PINDList.PINDIterator referenced = current.get(dependantId).elementIterator();
                 while (referenced.hasNext()) {
                     PINDList.PINDElement ref = referenced.next();
-                    long refNull = attributes[ref.referenced].getMetadata().nullEntries;
+                    long refNull = attributes[ref.referencedId].getMetadata().nullEntries;
 
                     if (config.nullHandling == Config.NullHandling.FOREIGN) {
                         if (refNull > 0) {
