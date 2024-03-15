@@ -1,7 +1,8 @@
 package io;
 
 import org.fastfilter.cuckoo.Cuckoo8;
-import org.fastfilter.utils.Hash;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import runner.Config;
 import structures.Attribute;
 import structures.Candidates;
@@ -11,29 +12,27 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
-
-import static java.util.stream.Collectors.*;
 
 public class Validator {
     Config config;
+    Logger logger;
     Attribute[] attributeIndex;
     Candidates candidates;
-    Queue<Entry> topValues;
+    PriorityQueue<Entry> topValues;
     List<Entry> topGroup;
     BufferedReader[] readers;
     String currentValue;
+    long t = 0;
 
     public Validator(Config config, Attribute[] attributeIndex, Candidates candidates) throws IOException {
         this.config = config;
         this.attributeIndex = attributeIndex;
         this.candidates = candidates;
-        topValues = new PriorityQueue<>();
+        topValues = new PriorityQueue<>(attributeIndex.length, Entry::compareTo);
         topGroup = new ArrayList<>();
         initReaders(attributeIndex);
+        logger = LoggerFactory.getLogger(Validator.class);
     }
 
     public void validate(int layer, Cuckoo8 filter) {
@@ -52,17 +51,19 @@ public class Validator {
         long nonUnique = 0;
         while (valueGroup != null) {
             if (layer == 1 && valueGroup.size() > 1) {
-                unique++;
+                nonUnique++;
                 long hash = currentValue.hashCode();
                 filter.insert(hash);
-            } else {
+            } else if (valueGroup.size() > 1) {
                 nonUnique++;
+            } else {
+                unique++;
             }
             candidates.prune(valueGroup);
             updateTopValues();
             valueGroup = loadNextGroup();
         }
-        System.out.println(unique + " | " + nonUnique);
+        logger.info("Num Unique: " + unique + " | non-unique: " + nonUnique);
         closeReaders();
     }
 
@@ -102,16 +103,20 @@ public class Validator {
         topGroup.add(firstEntry);
 
         // add all readers which have the same top value
-        while (topValues.peek() != null && topValues.peek().equals(firstEntry)) {
+        Entry nextEntry = topValues.peek();
+        while (nextEntry != null && nextEntry.equals(firstEntry)) {
             Entry partOfValueGroup = topValues.poll();
             topGroup.add(partOfValueGroup);
+            nextEntry = topValues.peek();
         }
 
-        topGroup.parallelStream().forEach(Entry::load);
+        // Notice: this part takes the longest, by quite a bit.
+        topGroup.forEach(Entry::load);
         HashMap<Integer, Long> valueGroup = new HashMap<>();
         for (Entry e : topGroup) {
             valueGroup.putAll(e.getConnectedAttributes());
         }
+        // End of notice
 
         // set the current value
         currentValue = firstEntry.getValue();
@@ -122,7 +127,7 @@ public class Validator {
         List<Integer> relations = Arrays.stream(attributeIndex).mapToInt(Attribute::getRelationId).distinct().boxed().toList();
         readers = new BufferedReader[relations.size()];
         for (int i = 0; i < readers.length; i++) {
-            readers[i] = new BufferedReader(new FileReader(config.tempFolder + File.separator + "relation_" + relations.get(i) + ".txt"), 65536);
+            readers[i] = new BufferedReader(new FileReader(config.tempFolder + File.separator + "relation_" + relations.get(i) + ".txt"));
             updateReader(i);
         }
     }
