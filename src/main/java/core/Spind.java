@@ -26,17 +26,19 @@ public class Spind {
     Output output;
     Clock clock;
     RelationMetadata[] relationMetadata;
-    int mergeSize = 50;
-    int sortSize = 500_000;
-    int chunkSize = 5_000_000;
+    final int MERGE_SIZE = 100;
+    final int SORT_SIZE = 500_000;
+    final int CHUNK_SIZE = 10_000_000;
     int layer;
+    public int maxNary = -1;
 
     public Spind(Config config) {
+        this.clock = new Clock();
+        clock.start("total");
+
         this.config = config;
         this.output = new Output(config.resultFolder);
-        this.clock = new Clock();
         this.logger = LoggerFactory.getLogger(Spind.class);
-        clock.start("total");
         this.filter = new Cuckoo8(100_000_000);
     }
 
@@ -45,7 +47,7 @@ public class Spind {
         logger.info("Starting execution");
 
         clock.start("init");
-        this.relationMetadata = initializeRelations(chunkSize);
+        this.relationMetadata = initializeRelations();
 
         // 1) init the helper Classes
         Candidates candidates = new Candidates(config);
@@ -68,7 +70,7 @@ public class Spind {
             // 3.1) Load all attributes of the candidates.
             clock.start("sorting");
             List<SortResult> sortResults = sortJobs.parallelStream().map(sortJob -> {
-                        Sorter sorter = new Sorter(sortSize);
+                        Sorter sorter = new Sorter(SORT_SIZE);
                         return sorter.process(sortJob, config, filter, layer);
                     }
             ).toList();
@@ -87,50 +89,7 @@ public class Spind {
             List<MergeJob> mergeJobs = sortResults.stream().map(SortResult::mergeJob).toList();
 
             clock.start("merging");
-            while (!mergeJobs.isEmpty()) {
-                // 1) group by relation
-                List<MergeJob> groupedMergeJobs = new ArrayList<>();
-                for (int i = 0; i < relationMetadata.length; i++) {
-                    groupedMergeJobs.add(new MergeJob(new ArrayList<>(), i, null, false));
-                }
-                for (MergeJob mergeJob : mergeJobs) {
-                    groupedMergeJobs.get(mergeJob.relationId()).chunkPaths().addAll(mergeJob.chunkPaths());
-                }
-
-                // split jobs and save next parts
-                List<MergeJob> nextJobs = new ArrayList<>();
-                List<MergeJob> currentJobs = new ArrayList<>();
-
-                for (MergeJob job : groupedMergeJobs) {
-                    if (job.chunkPaths().isEmpty()) {
-                        continue;
-                    }
-                    int n = job.chunkPaths().size();
-                    if (n >= mergeSize) {
-                        List<Path> nextPaths = new ArrayList<>();
-                        for (int i = 0; i < n; i += mergeSize) {
-                            Path resultPath = Path.of(job.chunkPaths().get(i) + "_m_" + i + ".txt");
-                            currentJobs.add(new MergeJob(new ArrayList<>(job.chunkPaths().subList(i, Math.min(i+ mergeSize,n))), job.relationId(), resultPath, false));
-                            nextPaths.add(resultPath);
-                        }
-                        nextJobs.add(new MergeJob(nextPaths, job.relationId(), null, false));
-                    }
-                    else {
-                        Path resultPath = Path.of(config.tempFolder + File.separator + "relation_" + job.relationId() + ".txt");
-                        currentJobs.add(new MergeJob(job.chunkPaths(), job.relationId(), resultPath, true));
-                    }
-                }
-
-                Attribute[] finalAttributes = attributes;
-                currentJobs.parallelStream().forEach(mergeJob -> {
-                    if (mergeJob.chunkPaths().isEmpty()) {
-                        return;
-                    }
-                    Merger merger = new Merger();
-                    merger.merge(mergeJob.chunkPaths(), mergeJob.to(), finalAttributes, mergeJob.isFinal());
-                });
-                mergeJobs = nextJobs;
-            }
+            iterativeMerge(attributes, mergeJobs);
             logger.info("Finished merging. Took: " + clock.stop("merging") + "ms");
 
             // 3.2) Validate candidates.
@@ -142,9 +101,9 @@ public class Spind {
             candidates.cleanCandidates();
             logger.info("Finished validation. Took: " + clock.stop("validation") + "ms");
 
-            logger.info("Found " + calcINDs(attributes) + " pINDs at level " + layer);
+            logger.info("Found " + calcPINDs(attributes) + " pINDs at level " + layer);
 
-            if (layer == 1) break;
+            if (maxNary > 0 && layer == maxNary) break;
 
             // 3.4) Generate new attributes for next layer.
             clock.start("generateNext");
@@ -164,7 +123,55 @@ public class Spind {
         output.storeMetadata(config, clock);
     }
 
-    private int calcINDs(Attribute[] attributes) {
+    private void iterativeMerge(Attribute[] attributes, List<MergeJob> mergeJobs) {
+        while (!mergeJobs.isEmpty()) {
+            // 1) group by relation
+            List<MergeJob> groupedMergeJobs = new ArrayList<>();
+            for (int i = 0; i < relationMetadata.length; i++) {
+                groupedMergeJobs.add(new MergeJob(new ArrayList<>(), i, null, false));
+            }
+            for (MergeJob mergeJob : mergeJobs) {
+                groupedMergeJobs.get(mergeJob.relationId()).chunkPaths().addAll(mergeJob.chunkPaths());
+            }
+
+            // split jobs and save next parts
+            List<MergeJob> nextJobs = new ArrayList<>();
+            List<MergeJob> currentJobs = new ArrayList<>();
+
+            for (MergeJob job : groupedMergeJobs) {
+                if (job.chunkPaths().isEmpty()) {
+                    continue;
+                }
+                int n = job.chunkPaths().size();
+                if (n >= MERGE_SIZE) {
+                    // Case 1: The number of files exceeds the merge size threshold -> Merge subsets of the spilled files and re-add then to the next iteration
+                    List<Path> nextPaths = new ArrayList<>();
+                    for (int i = 0; i < n; i += MERGE_SIZE) {
+                        Path resultPath = Path.of(job.chunkPaths().get(i) + "_m_" + i + ".txt");
+                        currentJobs.add(new MergeJob(new ArrayList<>(job.chunkPaths().subList(i, Math.min(i+ MERGE_SIZE,n))), job.relationId(), resultPath, false));
+                        nextPaths.add(resultPath);
+                    }
+                    nextJobs.add(new MergeJob(nextPaths, job.relationId(), null, false));
+                }
+                else {
+                    // Case 2: The number of files does not exceed the threshold -> the next merge finishes the relation file.
+                    Path resultPath = Path.of(config.tempFolder + File.separator + "relation_" + job.relationId() + ".txt");
+                    currentJobs.add(new MergeJob(job.chunkPaths(), job.relationId(), resultPath, true));
+                }
+            }
+
+            currentJobs.parallelStream().forEach(mergeJob -> {
+                if (mergeJob.chunkPaths().isEmpty()) {
+                    return;
+                }
+                Merger merger = new Merger();
+                merger.merge(mergeJob.chunkPaths(), mergeJob.to(), attributes, mergeJob.isFinal());
+            });
+            mergeJobs = nextJobs;
+        }
+    }
+
+    private int calcPINDs(Attribute[] attributes) {
         int total = 0;
         for (Attribute attribute : attributes) {
             if (attribute.getReferenced() != null) {
@@ -174,7 +181,7 @@ public class Spind {
         return total;
     }
 
-    private RelationMetadata[] initializeRelations(int chunkSize) throws IOException {
+    private RelationMetadata[] initializeRelations() throws IOException {
         RelationMetadata[] relationMetadata = new RelationMetadata[config.tableNames.length];
 
         int relationOffset = 0;
@@ -194,7 +201,7 @@ public class Spind {
         Arrays.stream(relationMetadata).parallel().forEach(relation -> {
             long sTime = System.currentTimeMillis();
             try {
-                relation.createChunks(chunkSize/relation.columnNames.length, config);
+                relation.createChunks(CHUNK_SIZE/relation.columnNames.length, config);
             } catch (IOException e) {
                 e.printStackTrace();
             }
