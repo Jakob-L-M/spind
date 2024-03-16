@@ -44,7 +44,7 @@ public class Candidates {
                 if (valueGroup.containsKey(referencedAttribute.referencedId)) continue;
 
                 // not null since we iterate over the key set
-                if (referencedAttribute.violate(occurrences) < 0) {
+                if (referencedAttribute.violate(occurrences) < 0L) {
                     referenced.remove();
                 }
             }
@@ -222,9 +222,9 @@ public class Candidates {
     }
 
     public void cleanCandidates() {
-        for (int i = 0; i < current.length; i++) {
-            if (current[i].getReferenced() != null && current[i].getReferenced().isEmpty()) {
-                current[i] = null;
+        for (Attribute attribute : current) {
+            if (attribute.getReferenced() != null && attribute.getReferenced().isEmpty()) {
+                attribute.setReferenced(null);
             }
         }
     }

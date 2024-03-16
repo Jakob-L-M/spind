@@ -116,6 +116,11 @@ public class PINDList {
                 // set current to null, since it is 'deleted'
                 current = null;
             }
+            // the last element should be removed
+            else if (this.next == null) {
+                last = this.previous;
+                last.next = null;
+            }
             // if we are at the first or later entry we need to put the next pointer of the previous element to the next element.
             // This means we exclude the current element.
             else {

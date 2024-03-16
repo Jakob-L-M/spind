@@ -1,16 +1,13 @@
 package io;
 
 import org.fastfilter.cuckoo.Cuckoo8;
+import org.fastfilter.utils.Hash;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import runner.Config;
-import structures.Attribute;
-import structures.Candidates;
-import structures.Entry;
+import structures.*;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
 
@@ -21,17 +18,14 @@ public class Validator {
     Candidates candidates;
     PriorityQueue<Entry> topValues;
     List<Entry> topGroup;
-    BufferedReader[] readers;
+    List<ValidationReader> readers;
     String currentValue;
-    long t = 0;
 
     public Validator(Config config, Attribute[] attributeIndex, Candidates candidates) throws IOException {
         this.config = config;
-        this.attributeIndex = attributeIndex;
+        this.attributeIndex = candidates.current;
         this.candidates = candidates;
-        topValues = new PriorityQueue<>(attributeIndex.length, Entry::compareTo);
-        topGroup = new ArrayList<>();
-        initReaders(attributeIndex);
+        initReaders();
         logger = LoggerFactory.getLogger(Validator.class);
     }
 
@@ -45,47 +39,68 @@ public class Validator {
             candidates.pruneGlobalUnique(attributeIndex);
         }
 
-        Map<Integer, Long> valueGroup = loadNextGroup();
-
-        long unique = 0;
-        long nonUnique = 0;
-        while (valueGroup != null) {
-            if (layer == 1 && valueGroup.size() > 1) {
-                nonUnique++;
-                long hash = currentValue.hashCode();
-                filter.insert(hash);
-            } else if (valueGroup.size() > 1) {
-                nonUnique++;
-            } else {
-                unique++;
+        while (!readers.isEmpty()) {
+            String maxValue = updateReaders();
+            HashMap<String, StringBuilder> valueGroupMap = new HashMap<>();
+            for (ValidationReader reader : readers) {
+                Entry next = reader.queue.poll();
+                while (next != null && next.getValue().compareTo(maxValue) <= 0) {
+                    String connectedAttributes = next.getSerializedAttributes();
+                    valueGroupMap.compute(next.getValue(), (k, v) -> v == null ? new StringBuilder(connectedAttributes) : v.append(connectedAttributes));
+                    next = reader.queue.poll();
+                }
+                if (next != null) {
+                    // if the most recent value is bigger than the biggest safe value, we re-add it to the front of the queue.
+                    reader.queue.addFirst(next);
+                }
             }
-            candidates.prune(valueGroup);
-            updateTopValues();
-            valueGroup = loadNextGroup();
-        }
-        logger.info("Num Unique: " + unique + " | non-unique: " + nonUnique);
-        closeReaders();
-    }
 
-    private void closeReaders() {
-        for (BufferedReader reader : readers) {
-            try {
-                reader.close();
-            } catch (IOException e) {
-                e.printStackTrace();
+            List<ValidationTuple> valueGroups = valueGroupMap.entrySet().stream().parallel().map(group -> {
+                HashMap<Integer, Long> valueGroup = buildAttributeMap(group.getValue().toString());
+                boolean onlyRef = true;
+                // TODO: idea -> maybe already remove non-interesting attributes here.
+                for (int attributeId : valueGroup.keySet()) {
+                    if (attributeIndex[attributeId].getReferenced() != null) {
+                        onlyRef = false;
+                        break;
+                    }
+                }
+                if (onlyRef) {
+                    return null;
+                } else {
+                    return new ValidationTuple(valueGroup, (long) group.getKey().hashCode());
+                }
+            }).filter(Objects::nonNull).toList();
+
+            for (ValidationTuple validationTuple : valueGroups) {
+                HashMap<Integer, Long> valueGroup = validationTuple.attributeGroup();
+                if (layer == 1 && valueGroup.size() > 1) {
+                    filter.insert(validationTuple.hash());
+                }
+                candidates.prune(valueGroup);
             }
+
+            cleanReaders();
         }
     }
 
     /**
      * updates every reader that was used in last value group
      */
-    private void updateTopValues() {
+    private String updateReaders() {
         // load the new values in parallel
-        topGroup.forEach(x -> updateReader(x.getReaderNumber()));
+        return readers.stream().parallel().map(ValidationReader::update).min(String::compareTo).orElse(null);
+    }
 
-        // clear the current top values
-        topGroup.clear();
+    private void cleanReaders() {
+        Iterator<ValidationReader> it = readers.iterator();
+        while (it.hasNext()) {
+            ValidationReader next = it.next();
+            if (next.finished && next.queue.isEmpty()) {
+                next.close();
+                it.remove();
+            }
+        }
     }
 
     /**
@@ -123,24 +138,24 @@ public class Validator {
         return valueGroup;
     }
 
-    private void initReaders(Attribute[] attributeIndex) throws IOException {
+    private void initReaders() throws IOException {
         List<Integer> relations = Arrays.stream(attributeIndex).mapToInt(Attribute::getRelationId).distinct().boxed().toList();
-        readers = new BufferedReader[relations.size()];
-        for (int i = 0; i < readers.length; i++) {
-            readers[i] = new BufferedReader(new FileReader(config.tempFolder + File.separator + "relation_" + relations.get(i) + ".txt"));
-            updateReader(i);
+        readers = new ArrayList<>();
+        for (int relation : relations) {
+            readers.add(new ValidationReader(config.tempFolder + File.separator + "relation_" + relation + ".txt", 2 ^ 13, 100));
         }
     }
 
-    private void updateReader(int readerNumber) {
-        String nextLine;
-        try {
-            nextLine = readers[readerNumber].readLine();
-            if (nextLine == null) return;
-            Entry toAdd = new Entry(nextLine, readers[readerNumber].readLine(), readerNumber);
-            topValues.add(toAdd);
-        } catch (IOException e) {
-            e.printStackTrace();
+    private HashMap<Integer, Long> buildAttributeMap(String serializedAttributes) {
+        HashMap<Integer, Long> connectedAttributes = new HashMap<>();
+        String[] attributes = serializedAttributes.split(";");
+        for (String attribute : attributes) {
+            String[] idOccurrenceTuple = attribute.split(",");
+            if (idOccurrenceTuple.length != 2) {
+                continue;
+            }
+            connectedAttributes.put(Integer.valueOf(idOccurrenceTuple[0]), Long.valueOf(idOccurrenceTuple[1]));
         }
+        return connectedAttributes;
     }
 }
