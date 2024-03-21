@@ -9,8 +9,8 @@ public class Config {
     public String[] tableNames;
     public String DEFAULT_HEADER_STRING = "column";
     public String folderPath = "D:\\MA\\data" + File.separator;
-    public String tempFolder = ".\\temp";
-    public String resultFolder = ".\\result";
+    public String tempFolder = "D:\\MA\\temp";
+    public String resultFolder = ".\\results";
     public String fileEnding = ".csv";
     public char separator = ',';
     public char quoteChar = '\"';
@@ -64,6 +64,10 @@ public class Config {
                 this.inputFileHasHeader = true;
                 this.fileEnding = ".csv";
             }
+            case CARS -> {
+                this.databaseName = "Kaggle\\used-car-dataset-ford-and-mercedes";
+                this.tableNames = new String[]{"audi", "bmw", "cclass", "focus", "ford", "hyundi", "merc", "skoda", "toyota", "unclean cclass", "unclean focus", "vauxhall", "vw"};
+            }
             case MUSICBRAINZ -> {
                 this.databaseName = "musicbrainz";
                 this.tableNames = new String[]{"alternative_release_type", "area", "area_alias", "area_alias_type", "area_gid_redirect", "area_type", "artist", "artist_alias",
@@ -100,7 +104,7 @@ public class Config {
     }
 
     public enum Dataset {
-        TPCH_1, ANIMAL_CROSSING, DATA_GOV, UEFA, MUSICBRAINZ
+        TPCH_1, ANIMAL_CROSSING, DATA_GOV, UEFA, MUSICBRAINZ, CARS
     }
 
     public enum NullHandling {
