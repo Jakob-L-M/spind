@@ -1,6 +1,7 @@
 package structures;
 
-import com.opencsv.CSVWriter;
+import com.opencsv.CSVWriterBuilder;
+import com.opencsv.ICSVWriter;
 import io.RelationalInput;
 import runner.Config;
 
@@ -47,7 +48,10 @@ public class RelationMetadata {
         int chunkNum = 0;
         Path chunkPath = Path.of(config.tempFolder + File.separator + "r_" + relationId + "_c_" + chunkNum + ".txt");
         BufferedWriter chunkWriter = Files.newBufferedWriter(chunkPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
-        CSVWriter csvWriter = new CSVWriter(chunkWriter);
+        ICSVWriter csvWriter = new CSVWriterBuilder(chunkWriter)
+                .withSeparator(config.separator)
+                .withQuoteChar(config.quoteChar)
+                .withEscapeChar(config.fileEscape).build();
         chunks.add(chunkPath);
         int chunkSize = 0;
 
@@ -62,7 +66,10 @@ public class RelationMetadata {
                     chunkSize = 0;
                     chunkPath = Path.of(config.tempFolder + File.separator + "r_" + relationId + "_c_" + chunkNum + ".txt");
                     chunkWriter = Files.newBufferedWriter(chunkPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
-                    csvWriter = new CSVWriter(chunkWriter);
+                    csvWriter = new CSVWriterBuilder(chunkWriter)
+                            .withSeparator(config.separator)
+                            .withQuoteChar(config.quoteChar)
+                            .withEscapeChar(config.fileEscape).build();
                     chunks.add(chunkPath);
                 }
             }

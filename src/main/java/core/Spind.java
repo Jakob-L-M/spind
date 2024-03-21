@@ -20,17 +20,17 @@ import java.util.Collections;
 import java.util.List;
 
 public class Spind {
+    final int MERGE_SIZE = 100;
+    final int SORT_SIZE = 1_000_000;
+    final int CHUNK_SIZE = 10_000_000;
     private final Cuckoo8 filter;
+    public int maxNary = -1;
     Config config;
     Logger logger;
     Output output;
     Clock clock;
     RelationMetadata[] relationMetadata;
-    final int MERGE_SIZE = 100;
-    final int SORT_SIZE = 500_000;
-    final int CHUNK_SIZE = 10_000_000;
     int layer;
-    public int maxNary = -1;
 
     public Spind(Config config) {
         this.clock = new Clock();
@@ -66,10 +66,12 @@ public class Spind {
             attachAttributes(attributes);
             List<SortJob> sortJobs = createSortJobs();
 
-            logger.info("Starting layer: " + layer + " with " + attributes.length + " attributes forming " + "TODO");// candidates.current.keySet().stream().mapToInt(x -> candidates.current.get(x).size()).sum() + " candidates");
+            logger.info("Starting layer: " + layer + " with " + attributes.length + " attributes forming " + "TODO");// candidates.current.keySet().stream().mapToInt(x ->
+            // candidates.current.get(x).size()).sum() + " candidates");
             // 3.1) Load all attributes of the candidates.
             clock.start("sorting");
             List<SortResult> sortResults = sortJobs.parallelStream().map(sortJob -> {
+                logger.debug("Starting to sort: " + sortJob.chunkPath());
                         Sorter sorter = new Sorter(SORT_SIZE);
                         return sorter.process(sortJob, config, filter, layer);
                     }
@@ -84,7 +86,7 @@ public class Spind {
                     totalSaved += sortAttribute.getMetadata().globalUnique;
                 }
             }
-            logger.info("In total " + totalSaved + " lines where skipped due to global uniqueness");
+            logger.info("In total " + totalSaved + " occurrences where skipped due to global uniqueness");
 
             List<MergeJob> mergeJobs = sortResults.stream().map(SortResult::mergeJob).toList();
 
@@ -94,7 +96,7 @@ public class Spind {
 
             // 3.2) Validate candidates.
             clock.start("validation");
-            Validator validator = new Validator(config, attributes, candidates);
+            Validator validator = new Validator(config, candidates);
             validator.validate(layer, filter);
 
             // remove all dependant candidates, that do not reference any attribute
@@ -102,6 +104,7 @@ public class Spind {
             logger.info("Finished validation. Took: " + clock.stop("validation") + "ms");
 
             logger.info("Found " + calcPINDs(attributes) + " pINDs at level " + layer);
+            output.storePINDs(relationMetadata, attributes, layer);
 
             if (maxNary > 0 && layer == maxNary) break;
 
@@ -148,12 +151,11 @@ public class Spind {
                     List<Path> nextPaths = new ArrayList<>();
                     for (int i = 0; i < n; i += MERGE_SIZE) {
                         Path resultPath = Path.of(job.chunkPaths().get(i) + "_m_" + i + ".txt");
-                        currentJobs.add(new MergeJob(new ArrayList<>(job.chunkPaths().subList(i, Math.min(i+ MERGE_SIZE,n))), job.relationId(), resultPath, false));
+                        currentJobs.add(new MergeJob(new ArrayList<>(job.chunkPaths().subList(i, Math.min(i + MERGE_SIZE, n))), job.relationId(), resultPath, false));
                         nextPaths.add(resultPath);
                     }
                     nextJobs.add(new MergeJob(nextPaths, job.relationId(), null, false));
-                }
-                else {
+                } else {
                     // Case 2: The number of files does not exceed the threshold -> the next merge finishes the relation file.
                     Path resultPath = Path.of(config.tempFolder + File.separator + "relation_" + job.relationId() + ".txt");
                     currentJobs.add(new MergeJob(job.chunkPaths(), job.relationId(), resultPath, true));
@@ -201,7 +203,7 @@ public class Spind {
         Arrays.stream(relationMetadata).parallel().forEach(relation -> {
             long sTime = System.currentTimeMillis();
             try {
-                relation.createChunks(CHUNK_SIZE/relation.columnNames.length, config);
+                relation.createChunks(CHUNK_SIZE / relation.columnNames.length, config);
             } catch (IOException e) {
                 e.printStackTrace();
             }
