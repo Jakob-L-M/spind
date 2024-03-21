@@ -5,14 +5,12 @@ import structures.Entry;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.PriorityQueue;
 
 /**
@@ -33,7 +31,7 @@ public class Merger {
         this.readers = new BufferedReader[files.size()];
 
         for (int index = 0; index < files.size(); ++index) {
-            BufferedReader reader = new BufferedReader(new FileReader(files.get(index).toString()), 2 ^ 16);
+            BufferedReader reader = Files.newBufferedReader(files.get(index));
             this.readers[index] = reader;
             String firstLine = reader.readLine();
             if (firstLine != null) {
