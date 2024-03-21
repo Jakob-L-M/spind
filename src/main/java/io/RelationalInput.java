@@ -35,16 +35,8 @@ public class RelationalInput {
 
         BufferedReader reader = Files.newBufferedReader(relationPath);
 
-        this.CSVReader = new CSVReaderBuilder(reader)
-                .withCSVParser(
-                        new CSVParserBuilder()
-                                .withSeparator(config.separator)
-                                .withEscapeChar(config.fileEscape)
-                                .withIgnoreLeadingWhiteSpace(config.ignoreLeadingWhiteSpace)
-                                .withStrictQuotes(config.strictQuotes)
-                                .withQuoteChar(config.quoteChar)
-                                .build()
-                ).build();
+        this.CSVReader =
+                new CSVReaderBuilder(reader).withCSVParser(new CSVParserBuilder().withSeparator(config.separator).withEscapeChar(config.fileEscape).withIgnoreLeadingWhiteSpace(config.ignoreLeadingWhiteSpace).withStrictQuotes(config.strictQuotes).withQuoteChar(config.quoteChar).build()).build();
 
         // read the first line
         this.nextLine = readNextLine();
@@ -72,7 +64,8 @@ public class RelationalInput {
 
         BufferedReader reader = Files.newBufferedReader(sortJob.chunkPath());
 
-        this.CSVReader = new CSVReaderBuilder(reader).withCSVParser(new CSVParserBuilder().withQuoteChar(config.quoteChar).build()).build();
+        this.CSVReader = new CSVReaderBuilder(reader)
+                .withCSVParser(new CSVParserBuilder().withQuoteChar(config.quoteChar).withSeparator(config.separator).build()).build();
 
         // read the first line
         this.nextLine = readNextLine();
@@ -211,16 +204,13 @@ public class RelationalInput {
      */
     private void replaceNullAndEscape(String[] lineArray) {
         for (int i = 0; i < lineArray.length; i++) {
-            if (lineArray[i].equals(config.nullString)) {
+            if (chunkReader && lineArray[i].equals(config.nullString)) {
                 if (config.nullHandling != Config.NullHandling.EQUALITY) {
                     // in equality mode, we treat every null entry as the same exact value
                     lineArray[i] = null;
                 }
             } else if (!chunkReader) {
                 lineArray[i] = lineArray[i].replace('\n', '\0');
-                if (config.quoteChar != '"') {
-                    lineArray[i] = lineArray[i].replace("\"", "'");
-                }
             }
         }
     }
