@@ -4,7 +4,6 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.ArrayDeque;
 
 public class ValidationReader {
@@ -14,8 +13,8 @@ public class ValidationReader {
     public boolean finished;
 
 
-    public ValidationReader(String relationPath,int bufferSize, int queueSize) throws FileNotFoundException {
-        this.reader = new BufferedReader(new FileReader(relationPath), bufferSize);
+    public ValidationReader(String relationPath, int queueSize) throws FileNotFoundException {
+        this.reader = new BufferedReader(new FileReader(relationPath));
         this.queue = new ArrayDeque<>(queueSize);
         this.size = queueSize;
         finished = false;
@@ -23,7 +22,7 @@ public class ValidationReader {
 
     public String update() {
 
-        if (queue.size() == size) {
+        if (finished || queue.size() == size) {
             return queue.getLast().getValue();
         }
 

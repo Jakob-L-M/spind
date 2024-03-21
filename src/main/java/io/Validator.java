@@ -1,7 +1,6 @@
 package io;
 
 import org.fastfilter.cuckoo.Cuckoo8;
-import org.fastfilter.utils.Hash;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import runner.Config;
@@ -16,12 +15,9 @@ public class Validator {
     Logger logger;
     Attribute[] attributeIndex;
     Candidates candidates;
-    PriorityQueue<Entry> topValues;
-    List<Entry> topGroup;
     List<ValidationReader> readers;
-    String currentValue;
 
-    public Validator(Config config, Attribute[] attributeIndex, Candidates candidates) throws IOException {
+    public Validator(Config config, Candidates candidates) throws IOException {
         this.config = config;
         this.attributeIndex = candidates.current;
         this.candidates = candidates;
@@ -68,7 +64,11 @@ public class Validator {
                 if (onlyRef) {
                     return null;
                 } else {
-                    return new ValidationTuple(valueGroup, (long) group.getKey().hashCode());
+                    if (layer == 1) {
+                        return new ValidationTuple(valueGroup, (long) group.getKey().hashCode());
+                    } else {
+                        return new ValidationTuple(valueGroup, 0L);
+                    }
                 }
             }).filter(Objects::nonNull).toList();
 
@@ -103,46 +103,12 @@ public class Validator {
         }
     }
 
-    /**
-     * will load the next value group using the topValue pointers
-     *
-     * @return A Map of all included attribute id's with their occurrences
-     */
-    private Map<Integer, Long> loadNextGroup() {
-
-        // if the topValues are empty, the validation is complete
-        if (topValues.isEmpty()) return null;
-
-        // poll the first entry. This entry will be used to expand the topValue group
-        Entry firstEntry = topValues.poll();
-        topGroup.add(firstEntry);
-
-        // add all readers which have the same top value
-        Entry nextEntry = topValues.peek();
-        while (nextEntry != null && nextEntry.equals(firstEntry)) {
-            Entry partOfValueGroup = topValues.poll();
-            topGroup.add(partOfValueGroup);
-            nextEntry = topValues.peek();
-        }
-
-        // Notice: this part takes the longest, by quite a bit.
-        topGroup.forEach(Entry::load);
-        HashMap<Integer, Long> valueGroup = new HashMap<>();
-        for (Entry e : topGroup) {
-            valueGroup.putAll(e.getConnectedAttributes());
-        }
-        // End of notice
-
-        // set the current value
-        currentValue = firstEntry.getValue();
-        return valueGroup;
-    }
-
     private void initReaders() throws IOException {
         List<Integer> relations = Arrays.stream(attributeIndex).mapToInt(Attribute::getRelationId).distinct().boxed().toList();
         readers = new ArrayList<>();
         for (int relation : relations) {
-            readers.add(new ValidationReader(config.tempFolder + File.separator + "relation_" + relation + ".txt", 2 ^ 13, 100));
+            int validationSize = 2500;
+            readers.add(new ValidationReader(config.tempFolder + File.separator + "relation_" + relation + ".txt", validationSize));
         }
     }
 
