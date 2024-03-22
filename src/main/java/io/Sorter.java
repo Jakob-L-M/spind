@@ -14,7 +14,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * The sorter is responsible for the creation of one pre-processed file per table. The files consist of as many lines as
@@ -30,6 +33,12 @@ public class Sorter {
     int spillCount;
     List<Path> spilledFiles;
 
+    /**
+     * To initialize a sorter, only the maximum map size is required. The constructor will initialize the value map and set the currentSize to 0.
+     *
+     * @param maxMapSize The maximal summed number of attribute (combinations) to be stored in the nested layer. This value should be as high as possible without risking memory
+     *                   overflows for the best possible performance.
+     */
     public Sorter(int maxMapSize) {
         this.maxMapSize = maxMapSize;
         values = new HashMap<>();
@@ -82,43 +91,49 @@ public class Sorter {
 
     /**
      * Will spill the current state to disk and clean the used memory
+     *
+     * @param chunkPath the path to which the file should be written.
      */
     private void spill(Path chunkPath) {
         spillCount++;
         logger.debug("Spilling " + chunkPath.getFileName() + " # " + spillCount);
         Path spillPath = Path.of(chunkPath + "_" + spillCount + ".txt");
-        spilledFiles.add(spillPath);
         toDisk(spillPath);
+        // keep track of all files that had
+        spilledFiles.add(spillPath);
     }
 
     /**
      * Writes a processed output file
+     *
+     * @param outputPath The path to which the file is written. Will overwrite an existing file.
      */
     private void toDisk(Path outputPath) {
         try {
-            BufferedWriter bw = Files.newBufferedWriter(outputPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
-
+            BufferedWriter writer = Files.newBufferedWriter(outputPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
 
             for (String value : values.keySet().stream().sorted().toList()) {
-                bw.write(value);
-                bw.newLine(); // identifier, where the value ends
-                Map<Integer, Long> attributesToOccurrences = values.get(value);
-                for (Integer attribute : attributesToOccurrences.keySet()) {
-                    long occurrences = attributesToOccurrences.get(attribute);
-
-                    bw.write(attribute.toString());
-                    bw.write(','); // attribute-occurrence separator
-                    bw.write(String.valueOf(occurrences));
-                    bw.write(';'); // attribute-attribute separator
-
-                }
-                bw.newLine();
+                writer.write(value);
+                writer.newLine(); // separate the value and the serialized attributes by a new line
+                values.get(value).forEach((k, v) -> {
+                    try {
+                        writer.write(String.valueOf(k));
+                        writer.write(','); // attribute-occurrence separator
+                        writer.write(String.valueOf(v));
+                        writer.write(';'); // attribute-attribute separator
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                });
+                writer.newLine();
             }
-            bw.close();
+            writer.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
-        values = new HashMap<>();
+
+        // reset the value map and size count.
+        values.clear();
         currentSize = 0;
     }
 }
