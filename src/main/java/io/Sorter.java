@@ -1,6 +1,7 @@
 package io;
 
 import org.fastfilter.cuckoo.Cuckoo8;
+import org.fastfilter.utils.Hash;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import runner.Config;
@@ -26,7 +27,7 @@ import java.util.Map;
  * present and also how often it is present in these.
  */
 public class Sorter {
-    Map<String, Map<Integer, Long>> values;
+    HashMap<String, HashMap<Integer, Long>> values;
     Logger logger;
     int maxMapSize;
     int currentSize;
@@ -46,7 +47,21 @@ public class Sorter {
         logger = LoggerFactory.getLogger(Sorter.class);
     }
 
-
+    /**
+     * This method processes a sort job. It will first deduplicate the values of a given chunk using a HashMap, while keeping track of with attributes are connected to which
+     * value. If the HashMap surpasses the maxMapSize or the end of the input is reached, the keys of the map are sorted and a file will be written to disk. The File has the
+     * structure:
+     * [Value1]
+     * [Serialized Attributes of Value1]
+     * [Value2]
+     * ....
+     *
+     * @param sortJob carries information regarding the input path, the connected attributes and the relation, that the chunk is associated with.
+     * @param config carries information on how to parse the chunk file correctly.
+     * @param filter If the layer is at least two, the filter is used to disregard "non-informational" values.
+     * @param layer The current layer, equal to the dimension of the connected attributes.
+     * @return A Tuple including a MergeJob and the connected attributes.
+     */
     public SortResult process(SortJob sortJob, Config config, Cuckoo8 filter, int layer) {
         spillCount = 0;
         spilledFiles = new ArrayList<>();
@@ -68,19 +83,20 @@ public class Sorter {
                     continue;
                 }
 
-                values.computeIfAbsent(value, v -> new HashMap<>());
+                Map<Integer, Long> valueMap = values.computeIfAbsent(value, v -> new HashMap<>());
 
-                if (1 == values.get(value).compute(attribute.getId(), (k, v) -> v == null ? 1 : v + 1)) {
-                    currentSize++;
-                    if (currentSize > maxMapSize) {
+                if (1L == valueMap.compute(attribute.getId(), (k, v) -> v == null ? 1L : ++v)) {
+                    if (++currentSize > maxMapSize) {
                         spill(sortJob.chunkPath());
                     }
                 }
             }
         }
+        // if there are value which have not been written yet, we need to save them before ending the job
         if (!values.isEmpty()) {
             spill(sortJob.chunkPath());
         }
+        // close the input reader
         try {
             input.close();
         } catch (IOException e) {
