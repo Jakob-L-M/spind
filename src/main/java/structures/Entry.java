@@ -2,7 +2,6 @@ package structures;
 
 import lombok.Getter;
 
-import java.util.Arrays;
 import java.util.HashMap;
 
 /**
@@ -18,9 +17,28 @@ class Entry implements Comparable<Entry> {
     private HashMap<Integer, Long> connectedAttributes;
 
 
+    /**
+     * Merge Constructor
+     *
+     * @param value                The entries string value.
+     * @param serializedAttributes The serialized string representation of the connected attributes. Id1,Occurrences1;Id2,Occurrences2;...
+     * @param readerNumber         The reader, that the entry is attached to.
+     */
     public Entry(final String value, String serializedAttributes, final int readerNumber) {
         this.value = value;
         this.readerNumber = readerNumber;
+        this.serializedAttributes = serializedAttributes;
+    }
+
+    /**
+     * Validation constructor.
+     *
+     * @param value                The entries string value.
+     * @param serializedAttributes The serialized string representation of the connected attributes. Id1,Occurrences1;Id2,Occurrences2;...
+     */
+    public Entry(final String value, String serializedAttributes) {
+        this.value = value;
+        this.readerNumber = 0;
         this.serializedAttributes = serializedAttributes;
     }
 
