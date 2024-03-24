@@ -25,7 +25,7 @@ public class Candidates {
      *
      * @param valueGroup the group of attributes which all share some value.
      */
-    public void prune(Map<Integer, Long> valueGroup) {
+    public synchronized void prune(Map<Integer, Long> valueGroup) {
         for (int dependantAttributeId : valueGroup.keySet()) {
             if (current[dependantAttributeId].getReferenced() == null) {
                 // the attribute does not depend on any other attribute.
