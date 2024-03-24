@@ -35,8 +35,15 @@ public class RelationalInput {
 
         BufferedReader reader = Files.newBufferedReader(relationPath);
 
-        this.CSVReader =
-                new CSVReaderBuilder(reader).withCSVParser(new CSVParserBuilder().withSeparator(config.separator).withEscapeChar(config.fileEscape).withIgnoreLeadingWhiteSpace(config.ignoreLeadingWhiteSpace).withStrictQuotes(config.strictQuotes).withQuoteChar(config.quoteChar).build()).build();
+        this.CSVReader = new CSVReaderBuilder(reader)
+                .withCSVParser(new CSVParserBuilder()
+                        .withSeparator(config.separator)
+                        .withEscapeChar(config.fileEscape)
+                        .withIgnoreLeadingWhiteSpace(config.ignoreLeadingWhiteSpace)
+                        .withStrictQuotes(config.strictQuotes)
+                        .withQuoteChar(config.quoteChar)
+                        .build())
+                .build();
 
         // read the first line
         this.nextLine = readNextLine();
@@ -81,49 +88,40 @@ public class RelationalInput {
      * accordingly.
      */
     public void updateAttributeCombinations(Cuckoo8 filter, int layer) {
-        String[] values = next();
+        String[] values = next(filter, layer);
+        assert values != null;
 
+        attributeLoop:
         for (Attribute a : attributes) {
             int[] containedColumns = a.getContainedColumns();
 
-            boolean skipValue = false;
-            boolean globalUnique = false;
             for (int column : containedColumns) {
                 if (values[column] == null) {
-                    skipValue = true;
-                    break;
+                    a.setCurrentValue(null);
+                    continue attributeLoop;
                 }
-                if (layer > 1 && !filter.mayContain(values[column].hashCode())) {
-                    skipValue = true;
-                    globalUnique = true;
-                    break;
-                }
-
             }
-            if (skipValue) {
-                a.setCurrentValue(null);
-                if (globalUnique) {
-                    a.getMetadata().globalUnique++;
-                }
-                continue;
-            }
-
-            StringBuilder entry = new StringBuilder();
-            // encode lengths to ensure uniqueness for multiple columns
-            if (containedColumns.length > 1) {
-                for (int i = 0; i < containedColumns.length - 2; i++) {
-                    entry.append(values[containedColumns[i]].length()).append(':');
-                }
-                entry.append(values[containedColumns[containedColumns.length - 2]].length()).append('|');
-            }
-
-            for (int containedColumn : containedColumns) {
-                entry.append(values[containedColumn]);
-            }
-
-            a.setCurrentValue(entry.toString());
+            a.setCurrentValue(buildCurrentValue(values, containedColumns));
         }
     }
+
+    private String buildCurrentValue(String[] values, int[] containedColumns) {
+        StringBuilder entry = new StringBuilder();
+        // encode lengths to ensure uniqueness for multiple columns
+        if (containedColumns.length > 1) {
+            for (int i = 0; i < containedColumns.length - 2; i++) {
+                entry.append(values[containedColumns[i]].length()).append(':');
+            }
+            entry.append(values[containedColumns[containedColumns.length - 2]].length()).append('|');
+        }
+
+        for (int containedColumn : containedColumns) {
+            entry.append(values[containedColumn]);
+        }
+
+        return entry.toString();
+    }
+
 
     /**
      * Checks if there is a next line in the input file
@@ -134,14 +132,7 @@ public class RelationalInput {
         return !(this.nextLine == null);
     }
 
-    /**
-     * Reads the next input line and stores it in a String array.
-     *
-     * @return The values of the next line
-     */
-    public String[] next() {
-        if (!hasNext()) return null;
-
+    private String[] next(Cuckoo8 filter, int layer) {
         String[] currentLine = this.nextLine;
 
         this.nextLine = readNextLine();
@@ -150,8 +141,29 @@ public class RelationalInput {
             readToNextValidLine();
         }
 
+        if (layer > 1) {
+            replaceNonInformative(currentLine, filter);
+        }
+
         currentLineNumber++;
         return currentLine;
+    }
+
+    private void replaceNonInformative(String[] currentLine, Cuckoo8 filter) {
+        for (int i = 0; i < currentLine.length; i++) {
+            if (currentLine[i] != null && !filter.mayContain(currentLine[i].hashCode())) {
+                currentLine[i] = null;
+            }
+        }
+    }
+
+    /**
+     * Reads the next input line and stores it in a String array.
+     *
+     * @return The values of the next line
+     */
+    public String[] next() {
+        return next(null, 1);
     }
 
     /**
