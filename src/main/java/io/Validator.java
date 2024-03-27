@@ -17,11 +17,11 @@ public class Validator {
     Candidates candidates;
     List<ValidationReader> readers;
 
-    public Validator(Config config, Candidates candidates) throws IOException {
+    public Validator(Config config, Candidates candidates, int validationSize) throws IOException {
         this.config = config;
         this.attributeIndex = candidates.current;
         this.candidates = candidates;
-        initReaders();
+        initReaders(validationSize);
         logger = LoggerFactory.getLogger(Validator.class);
     }
 
@@ -36,8 +36,10 @@ public class Validator {
         }
 
         while (!readers.isEmpty()) {
-            String maxValue = updateReaders();
+            String maxValue = updateReaders(); // parallel
             HashMap<String, StringBuilder> valueGroupMap = new HashMap<>();
+
+            // single
             for (ValidationReader reader : readers) {
                 Entry next = reader.queue.poll();
                 while (next != null && next.getValue().compareTo(maxValue) <= 0) {
@@ -51,7 +53,8 @@ public class Validator {
                 }
             }
 
-            List<ValidationTuple> valueGroups = valueGroupMap.entrySet().stream().parallel().map(group -> {
+            // parallel
+            valueGroupMap.entrySet().stream().parallel().map(group -> {
                 HashMap<Integer, Long> valueGroup = buildAttributeMap(group.getValue().toString());
                 boolean onlyRef = true;
                 // TODO: idea -> maybe already remove non-interesting attributes here.
@@ -70,16 +73,14 @@ public class Validator {
                         return new ValidationTuple(valueGroup, 0L);
                     }
                 }
-            }).filter(Objects::nonNull).toList();
-
-            for (ValidationTuple validationTuple : valueGroups) {
-                HashMap<Integer, Long> valueGroup = validationTuple.attributeGroup();
-                if (layer == 1 && valueGroup.size() > 1) {
-                    filter.insert(validationTuple.hash());
+            }).filter(Objects::nonNull).forEach(validationTuple -> {
+                if (layer == 1) {
+                    synchronized (filter) {
+                        filter.insert(validationTuple.hash());
+                    }
                 }
-                candidates.prune(valueGroup);
-            }
-
+                candidates.prune(validationTuple.attributeGroup());
+            });
             cleanReaders();
         }
     }
@@ -103,11 +104,10 @@ public class Validator {
         }
     }
 
-    private void initReaders() throws IOException {
+    private void initReaders(int validationSize) throws IOException {
         List<Integer> relations = Arrays.stream(attributeIndex).mapToInt(Attribute::getRelationId).distinct().boxed().toList();
         readers = new ArrayList<>();
         for (int relation : relations) {
-            int validationSize = 2500;
             readers.add(new ValidationReader(config.tempFolder + File.separator + "relation_" + relation + ".txt", validationSize));
         }
     }
