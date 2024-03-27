@@ -138,6 +138,7 @@ public class Sorter {
                 // clean and adjust the values and tracked nested size
                 entriesToSpill.forEach(entry -> values.remove(entry.getKey()));
                 currentSize -= entriesToSpill.stream().mapToInt(entry -> entry.getValue().size()).sum();
+
             } else {
                 entriesToSpill = values.entrySet().stream().sorted(Map.Entry.comparingByKey()).toList();
                 // no need to clean values since the garbage collector will remove the whole class anyway.
@@ -146,9 +147,6 @@ public class Sorter {
             if (isFinal) {
                 logger.debug("Spilling " + entriesToSpill.size() + " values to " + outputPath);
             } else {
-                if (outputPath.toString().equals("D:\\MA\\temp\\r_4_c_0.txt_14.txt")) {
-                    System.out.println("OI");
-                }
                 logger.debug("Spilling " + entriesToSpill.size() + " values to " + outputPath + ". Keeping " + currentSize + " connected attributes.");
             }
 
