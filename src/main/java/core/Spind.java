@@ -20,9 +20,10 @@ import java.util.Collections;
 import java.util.List;
 
 public class Spind {
-    final int MERGE_SIZE = 100;
-    final int SORT_SIZE = 1_000_000;
     final int CHUNK_SIZE = 10_000_000;
+    final int SORT_SIZE = 1_000_000;
+    final int MERGE_SIZE = 100;
+    final int VALIDATION_SIZE = 10_000;
     private final Cuckoo8 filter;
     public int maxNary = -1;
     Config config;
@@ -71,8 +72,8 @@ public class Spind {
             // 3.1) Load all attributes of the candidates.
             clock.start("sorting");
             List<SortResult> sortResults = sortJobs.parallelStream().map(sortJob -> {
-                logger.debug("Starting to sort: " + sortJob.chunkPath());
-                        Sorter sorter = new Sorter(SORT_SIZE);
+                        logger.debug("Starting to sort: " + sortJob.chunkPath());
+                        Sorter sorter = new Sorter(SORT_SIZE, (long) (sortJob.connectedAttributes().size()) * CHUNK_SIZE/SORT_SIZE);
                         return sorter.process(sortJob, config, filter, layer);
                     }
             ).toList();
@@ -96,7 +97,7 @@ public class Spind {
 
             // 3.2) Validate candidates.
             clock.start("validation");
-            Validator validator = new Validator(config, candidates);
+            Validator validator = new Validator(config, candidates, VALIDATION_SIZE);
             validator.validate(layer, filter);
 
             // remove all dependant candidates, that do not reference any attribute

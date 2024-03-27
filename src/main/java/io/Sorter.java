@@ -1,7 +1,6 @@
 package io;
 
 import org.fastfilter.cuckoo.Cuckoo8;
-import org.fastfilter.utils.Hash;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import runner.Config;
@@ -27,9 +26,10 @@ import java.util.Map;
  * present and also how often it is present in these.
  */
 public class Sorter {
+    private final int maxMapSize;
+    private final long minKeepCount;
     HashMap<String, HashMap<Integer, Long>> values;
     Logger logger;
-    int maxMapSize;
     int currentSize;
     int spillCount;
     List<Path> spilledFiles;
@@ -40,8 +40,9 @@ public class Sorter {
      * @param maxMapSize The maximal summed number of attribute (combinations) to be stored in the nested layer. This value should be as high as possible without risking memory
      *                   overflows for the best possible performance.
      */
-    public Sorter(int maxMapSize) {
+    public Sorter(int maxMapSize, long minKeepCount) {
         this.maxMapSize = maxMapSize;
+        this.minKeepCount = minKeepCount;
         values = new HashMap<>();
         currentSize = 0;
         logger = LoggerFactory.getLogger(Sorter.class);
@@ -57,9 +58,9 @@ public class Sorter {
      * ....
      *
      * @param sortJob carries information regarding the input path, the connected attributes and the relation, that the chunk is associated with.
-     * @param config carries information on how to parse the chunk file correctly.
-     * @param filter If the layer is at least two, the filter is used to disregard "non-informational" values.
-     * @param layer The current layer, equal to the dimension of the connected attributes.
+     * @param config  carries information on how to parse the chunk file correctly.
+     * @param filter  If the layer is at least two, the filter is used to disregard "non-informational" values.
+     * @param layer   The current layer, equal to the dimension of the connected attributes.
      * @return A Tuple including a MergeJob and the connected attributes.
      */
     public SortResult process(SortJob sortJob, Config config, Cuckoo8 filter, int layer) {
@@ -87,14 +88,14 @@ public class Sorter {
 
                 if (1L == valueMap.compute(attribute.getId(), (k, v) -> v == null ? 1L : ++v)) {
                     if (++currentSize > maxMapSize) {
-                        spill(sortJob.chunkPath());
+                        spill(sortJob.chunkPath(), false);
                     }
                 }
             }
         }
         // if there are value which have not been written yet, we need to save them before ending the job
         if (!values.isEmpty()) {
-            spill(sortJob.chunkPath());
+            spill(sortJob.chunkPath(), true);
         }
         // close the input reader
         try {
@@ -110,11 +111,10 @@ public class Sorter {
      *
      * @param chunkPath the path to which the file should be written.
      */
-    private void spill(Path chunkPath) {
+    private void spill(Path chunkPath, boolean isFinal) {
         spillCount++;
-        logger.debug("Spilling " + chunkPath.getFileName() + " # " + spillCount);
         Path spillPath = Path.of(chunkPath + "_" + spillCount + ".txt");
-        toDisk(spillPath);
+        toDisk(spillPath, isFinal);
         // keep track of all files that had
         spilledFiles.add(spillPath);
     }
@@ -124,14 +124,38 @@ public class Sorter {
      *
      * @param outputPath The path to which the file is written. Will overwrite an existing file.
      */
-    private void toDisk(Path outputPath) {
+    private void toDisk(Path outputPath, boolean isFinal) {
         try {
             BufferedWriter writer = Files.newBufferedWriter(outputPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
 
-            for (String value : values.keySet().stream().sorted().toList()) {
-                writer.write(value);
+            List<Map.Entry<String, HashMap<Integer, Long>>> entriesToSpill;
+            if (!isFinal) {
+                entriesToSpill = values.entrySet().stream()
+                        // only spill values where the occurrences are smaller than some threshold
+                        .filter(entry -> entry.getValue().values().stream().reduce(0L, Long::sum) < minKeepCount)
+                        .sorted(Map.Entry.comparingByKey()).toList();
+
+                // clean and adjust the values and tracked nested size
+                entriesToSpill.forEach(entry -> values.remove(entry.getKey()));
+                currentSize -= entriesToSpill.stream().mapToInt(entry -> entry.getValue().size()).sum();
+            } else {
+                entriesToSpill = values.entrySet().stream().sorted(Map.Entry.comparingByKey()).toList();
+                // no need to clean values since the garbage collector will remove the whole class anyway.
+            }
+
+            if (isFinal) {
+                logger.debug("Spilling " + entriesToSpill.size() + " values to " + outputPath);
+            } else {
+                if (outputPath.toString().equals("D:\\MA\\temp\\r_4_c_0.txt_14.txt")) {
+                    System.out.println("OI");
+                }
+                logger.debug("Spilling " + entriesToSpill.size() + " values to " + outputPath + ". Keeping " + currentSize + " connected attributes.");
+            }
+
+            for (Map.Entry<String, HashMap<Integer, Long>> entry : entriesToSpill) {
+                writer.write(entry.getKey());
                 writer.newLine(); // separate the value and the serialized attributes by a new line
-                values.get(value).forEach((k, v) -> {
+                entry.getValue().forEach((k, v) -> {
                     try {
                         writer.write(String.valueOf(k));
                         writer.write(','); // attribute-occurrence separator
@@ -144,12 +168,9 @@ public class Sorter {
                 writer.newLine();
             }
             writer.close();
+
         } catch (IOException e) {
             e.printStackTrace();
         }
-
-        // reset the value map and size count.
-        values.clear();
-        currentSize = 0;
     }
 }
