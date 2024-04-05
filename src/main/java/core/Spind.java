@@ -20,11 +20,12 @@ import java.util.Collections;
 import java.util.List;
 
 public class Spind {
-    final int CHUNK_SIZE = 10_000_000;
-    final int SORT_SIZE = 1_000_000;
-    final int MERGE_SIZE = 100;
-    final int VALIDATION_SIZE = 10_000;
+    final int CHUNK_SIZE;
+    final int SORT_SIZE;
+    final int MERGE_SIZE;
+    final int VALIDATION_SIZE;
     private final Cuckoo8 filter;
+    private final Metrics metrics;
     public int maxNary = -1;
     Config config;
     Logger logger;
@@ -37,10 +38,17 @@ public class Spind {
         this.clock = new Clock();
         clock.start("total");
 
+        this.metrics = new Metrics();
         this.config = config;
+        maxNary = config.maxNary;
         this.output = new Output(config.resultFolder);
         this.logger = LoggerFactory.getLogger(Spind.class);
         this.filter = new Cuckoo8(100_000_000);
+
+        CHUNK_SIZE = config.CHUNK_SIZE;
+        SORT_SIZE = config.SORT_SIZE;
+        MERGE_SIZE = config.MERGE_SIZE;
+        VALIDATION_SIZE = config.VALIDATION_SIZE;
     }
 
     public void execute() throws IOException {
@@ -73,11 +81,13 @@ public class Spind {
             clock.start("sorting");
             List<SortResult> sortResults = sortJobs.parallelStream().map(sortJob -> {
                         logger.debug("Starting to sort: " + sortJob.chunkPath());
-                        Sorter sorter = new Sorter(SORT_SIZE, (long) (sortJob.connectedAttributes().size()) * CHUNK_SIZE/SORT_SIZE);
+                        Sorter sorter = new Sorter(SORT_SIZE, (long) (sortJob.connectedAttributes().size()) * 10 * CHUNK_SIZE/SORT_SIZE);
                         return sorter.process(sortJob, config, filter, layer);
                     }
             ).toList();
             logger.info("Finished sorting. Took: " + clock.stop("sorting") + "ms");
+
+            metrics.sortFiles += sortResults.stream().mapToInt(sortResult -> sortResult.mergeJob().chunkPaths().size()).sum();
 
             long totalSaved = 0;
             for (SortResult sortResult : sortResults) {
@@ -105,7 +115,7 @@ public class Spind {
             logger.info("Finished validation. Took: " + clock.stop("validation") + "ms");
 
             logger.info("Found " + calcPINDs(attributes) + " pINDs at level " + layer);
-            output.storePINDs(relationMetadata, attributes, layer);
+            output.storePINDs(relationMetadata, attributes, layer, config);
 
             if (maxNary > 0 && layer == maxNary) break;
 
@@ -124,7 +134,7 @@ public class Spind {
         }
 
         // 4) Save the output
-        output.storeMetadata(config, clock);
+        output.storeMetadata(config, clock, metrics);
     }
 
     private void iterativeMerge(Attribute[] attributes, List<MergeJob> mergeJobs) {
@@ -162,6 +172,8 @@ public class Spind {
                     currentJobs.add(new MergeJob(job.chunkPaths(), job.relationId(), resultPath, true));
                 }
             }
+
+            metrics.mergeFiles += currentJobs.size();
 
             currentJobs.parallelStream().forEach(mergeJob -> {
                 if (mergeJob.chunkPaths().isEmpty()) {
@@ -211,6 +223,8 @@ public class Spind {
             logger.debug("Finished " + relation.relationName + " (" + (System.currentTimeMillis() - sTime) + "ms)");
         });
         logger.info("Finished chunking. Took: " + clock.stop("chunking"));
+
+        this.metrics.chunkFiles = Arrays.stream(relationMetadata).mapToInt(metadata -> metadata.chunks.size()).sum();
 
         return relationMetadata;
     }
