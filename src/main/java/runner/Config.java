@@ -4,6 +4,11 @@ import java.io.File;
 
 public class Config {
 
+    public int VALIDATION_SIZE = 100_000;
+    public int MERGE_SIZE = 250;
+    public int CHUNK_SIZE = 5_000_000;
+    public int SORT_SIZE = 2_000_000;
+    public int maxNary = -1;
     public final double threshold;
     public String databaseName;
     public String[] tableNames;
