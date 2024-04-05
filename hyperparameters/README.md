@@ -12,6 +12,15 @@ To utilize the full potential of _SPIND_, we will search for the best performing
 We will use Bayesian Optimization to efficiently find well performing parameters. The notebook [📘bayesian.ipynb](./bayesian.ipynb) includes code and documentation on how the optimization we executed.
 
 ## Observations
-Find the raw results in [📂data](./data/). After the first optimization run it became clear, that the parallelization degree is the major decider for the execution time. This is expected but was not proven to this point.
+Find the raw results in [🗂️data](./data/). After the first optimization run it became clear, that the parallelization degree is the major decider for the execution time. This is expected but was not proven to this point.
 ![A plot of the results that displays the effectiveness of parallelization.](./results/parallelization.jpeg)
 Within the subplots of the figure, the y-axis of the subplots always resemble the parallelization degree. The x-axis refer to the different [parameters of _SPIND_](https://github.com/Jakob-L-M/spind/blob/main/README.md). The plot uses data from the [data.gov dataset](https://github.com/Jakob-L-M/partial-inclusion-dependencies/tree/main/data/data.gov) where the n-ary search is limited to three layers. It shows that regardless of the other four parameters, we always find the clear trend that a higher degree of parallelization decreases the execution time. In further optimization runs we will therefore fix the parallelization degree to 12 (the maximum for my machine).
+
+With the parallelization set to its maximum, the second iterations yielded a rather unexpected result. The next most influential hyperparameter is the chunk size. We find, that the chunk size should be rather small and finds its maximum at roughly 10mil. An interpretation for this result is, that splitting large relations into more manageable chunks increases our capability of utilizing parallelization.
+
+![A plot of the results that displays the effectiveness different of chunk sizes.](./results/chunk_size.jpeg)
+
+Even though we create more files at first, it seems theses files would otherwise be spilled during the sorting phase. Once we start merging files, the total number of files did not chance much. Find the graphic below showing a heatmap with the total number of created files under changing chunk sizes in different datasets. The data was gathered using a sort size of 4mil and a merge size of 500. To further set the displayed number into perspective, the heatmap also includes the number of created files by pSPIDER (in unary settings) and pBINDER.
+
+- TODO: gather values and make heatmap
+- TODO: write about what can be seen.
