@@ -20,10 +20,68 @@ With the parallelization set to its maximum, the second iterations yielded a rat
 
 ![A plot of the results that displays the effectiveness different of chunk sizes.](./results/chunk_size.jpeg)
 
-Even though we create more files at first, it seems these files would otherwise be spilled during the sorting phase. Once we start merging files, the total number of files did not chance much. Find the graphic below showing a heatmap with the total number of created files under changing chunk sizes in different datasets. The data was gathered using a sort size of 4mil and merge size of 500. To further set the displayed number into perspective, 
-TODO: values for pBINDER and pSPIDER
+Even though we create more files at first, it seems these files would otherwise be spilled during the sorting phase. Once we start merging files, the total number of files did not chance much. Find the graphic below showing a heatmap with the total number of created files under changing chunk sizes in different datasets. The data was gathered using a sort size of 4mil and merge size of 500.
 
 <img src="./results/chunk_size_files.jpeg" alt="drawing" width="49%"/>
 <img src="./results/chunk_size_time.jpeg" alt="drawing" width="49%"/>
+
+To further set the displayed number into perspective, find the additional table below with the same numbers for pSPIDER and pBINDER.
+
+<table>
+  <tr>
+    <th rowspan="2">Dataset</th>
+    <td colspan="2">pBINDER</td>
+    <td colspan="2">pSPIDER</td>
+  </tr>
+  <tr>
+    <th>#Files</th>
+    <th>Time (sec)</th>
+    <th>#Files</th>
+    <th>Time (sec)</th>
+  </tr>
+  <tr>
+    <td>TPCH-1 u-nary</td>
+    <td>525</td>
+    <td>53</td>
+    <td>124</td>
+    <td>31</td>
+  </tr>
+  <tr>
+    <td>TPCH-1 2-nary</td>
+    <td>1023</td>
+    <td>240 (4min)</td>
+    <td>-</td>
+    <td>-</td>
+  </tr>
+  <tr>
+    <td>data.gov u-nary</td>
+    <td>2,427</td>
+    <td>52</td>
+    <td>602</td>
+    <td>30</td>
+  </tr>
+  <tr>
+    <td>data.gov 2-nary</td>
+    <td>28,417</td>
+    <td>362 (~6m)</td>
+    <td>-</td>
+    <td>-</td>
+  </tr>
+  <tr>
+    <td>data.gov 3-nary</td>
+    <td>895,851</td>
+    <td>9,596 (~2h 49m)</td>
+    <td>-</td>
+    <td>-</td>
+  </tr>
+  <tr>
+    <td>musicbrainz u-nary</td>
+    <td>9,321</td>
+    <td>1,418 (~24min)</td>
+    <td>2,809</td>
+    <td>1,348 (~22min)</td>
+  </tr>
+</table>
+
 
 Observing the plots, we find the total number of files created to always strictly decrease with an increased chunk size. This decrease is non-linear and is significantly decreased once the chunk size surpasses five million. The execution time is positively effected by a smaller chunk size, as we already learned. There is however a point at which this trend is inverted. For the compared datasets with varying max n-ary layers, we find that a chunk size of five million yields the best results overall. We fix the chunk size to five million going forward.
