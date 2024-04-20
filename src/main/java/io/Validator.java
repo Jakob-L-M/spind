@@ -25,7 +25,7 @@ public class Validator {
         logger = LoggerFactory.getLogger(Validator.class);
     }
 
-    public void validate(int layer, BloomFilter<Long> filter) {
+    public void validate(int layer, BloomFilter<Integer> filter) {
 
         candidates.calculateViolations(attributeIndex);
 
@@ -68,9 +68,9 @@ public class Validator {
                     return null;
                 } else {
                     if (layer == 1) {
-                        return new ValidationTuple(valueGroup, Hashing.hash(group.getKey()));
+                        return new ValidationTuple(valueGroup, group.getKey().hashCode());
                     } else {
-                        return new ValidationTuple(valueGroup, 0L);
+                        return new ValidationTuple(valueGroup, 0);
                     }
                 }
             }).filter(Objects::nonNull).forEach(validationTuple -> {

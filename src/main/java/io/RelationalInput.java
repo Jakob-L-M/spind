@@ -7,7 +7,6 @@ import com.opencsv.CSVReaderBuilder;
 import com.opencsv.exceptions.CsvValidationException;
 import runner.Config;
 import structures.Attribute;
-import structures.Hashing;
 import structures.SortJob;
 
 import java.io.BufferedReader;
@@ -88,7 +87,7 @@ public class RelationalInput {
      * Builds the string representation for every attribute combination of the given table and updates the attributes
      * accordingly.
      */
-    public void updateAttributeCombinations(BloomFilter<Long> filter, int layer) {
+    public void updateAttributeCombinations(BloomFilter<Integer> filter, int layer) {
         String[] values = next(filter, layer);
         assert values != null;
 
@@ -133,7 +132,7 @@ public class RelationalInput {
         return !(this.nextLine == null);
     }
 
-    private String[] next(BloomFilter<Long> filter, int layer) {
+    private String[] next(BloomFilter<Integer> filter, int layer) {
         String[] currentLine = this.nextLine;
 
         this.nextLine = readNextLine();
@@ -150,9 +149,9 @@ public class RelationalInput {
         return currentLine;
     }
 
-    private void replaceNonInformative(String[] currentLine, BloomFilter<Long> filter) {
+    private void replaceNonInformative(String[] currentLine, BloomFilter<Integer> filter) {
         for (int i = 0; i < currentLine.length; i++) {
-            if (currentLine[i] != null && !filter.mightContain(Hashing.hash(currentLine[i]))) {
+            if (currentLine[i] != null && !filter.mightContain(currentLine[i].hashCode())) {
                 currentLine[i] = null;
             }
         }

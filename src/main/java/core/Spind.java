@@ -26,7 +26,7 @@ public class Spind {
     final int SORT_SIZE;
     final int MERGE_SIZE;
     final int VALIDATION_SIZE;
-    private final BloomFilter<Long> filter;
+    private final BloomFilter<Integer> filter;
     private final Metrics metrics;
     private final int maxNary;
     final Config config;
@@ -45,7 +45,7 @@ public class Spind {
         maxNary = config.maxNary;
         this.output = new Output(config.resultFolder);
         this.logger = LoggerFactory.getLogger(Spind.class);
-        this.filter = BloomFilter.create(Funnels.longFunnel(), 100_000_000, 0.05);
+        this.filter = BloomFilter.create(Funnels.integerFunnel(), 100_000_000, 0.05);
 
         CHUNK_SIZE = config.CHUNK_SIZE;
         SORT_SIZE = config.SORT_SIZE;

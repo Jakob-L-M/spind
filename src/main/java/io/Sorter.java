@@ -65,7 +65,7 @@ public class Sorter {
      * @param layer   The current layer, equal to the dimension of the connected attributes.
      * @return A Tuple including a MergeJob and the connected attributes.
      */
-    public SortResult process(SortJob sortJob, Config config, BloomFilter<Long> filter, int layer) {
+    public SortResult process(SortJob sortJob, Config config, BloomFilter<Integer> filter, int layer) {
         spillCount = 0;
         spilledFiles = new ArrayList<>();
 
