@@ -1,6 +1,6 @@
 package io;
 
-import org.fastfilter.cuckoo.Cuckoo8;
+import com.google.common.hash.BloomFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import runner.Config;
@@ -24,6 +24,8 @@ import java.util.Map;
  * there are unique values in the whole relational input. The lines are ordered lexicographically by the value which
  * they are associated with. Further each line carries information in which attribute (Combinations) the value is
  * present and also how often it is present in these.
+ *
+ * @noinspection ALL
  */
 public class Sorter {
     private final int maxMapSize;
@@ -63,7 +65,7 @@ public class Sorter {
      * @param layer   The current layer, equal to the dimension of the connected attributes.
      * @return A Tuple including a MergeJob and the connected attributes.
      */
-    public SortResult process(SortJob sortJob, Config config, Cuckoo8 filter, int layer) {
+    public SortResult process(SortJob sortJob, Config config, BloomFilter<Long> filter, int layer) {
         spillCount = 0;
         spilledFiles = new ArrayList<>();
 
@@ -141,7 +143,7 @@ public class Sorter {
 
             } else {
                 entriesToSpill = values.entrySet().stream().sorted(Map.Entry.comparingByKey()).toList();
-                // no need to clean values since the garbage collector will remove the whole class anyway.
+                values = null;
             }
 
             if (isFinal) {

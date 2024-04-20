@@ -1,10 +1,11 @@
 package core;
 
+import com.google.common.hash.BloomFilter;
+import com.google.common.hash.Funnels;
 import io.Merger;
 import io.Output;
 import io.Sorter;
 import io.Validator;
-import org.fastfilter.cuckoo.Cuckoo8;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import runner.Config;
@@ -19,18 +20,19 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+/** @noinspection UnstableApiUsage*/
 public class Spind {
     final int CHUNK_SIZE;
     final int SORT_SIZE;
     final int MERGE_SIZE;
     final int VALIDATION_SIZE;
-    private final Cuckoo8 filter;
+    private final BloomFilter<Long> filter;
     private final Metrics metrics;
-    public int maxNary = -1;
-    Config config;
-    Logger logger;
-    Output output;
-    Clock clock;
+    private final int maxNary;
+    final Config config;
+    private final Logger logger;
+    private final Output output;
+    private final Clock clock;
     RelationMetadata[] relationMetadata;
     int layer;
 
@@ -43,7 +45,7 @@ public class Spind {
         maxNary = config.maxNary;
         this.output = new Output(config.resultFolder);
         this.logger = LoggerFactory.getLogger(Spind.class);
-        this.filter = new Cuckoo8(100_000_000);
+        this.filter = BloomFilter.create(Funnels.longFunnel(), 100_000_000, 0.05);
 
         CHUNK_SIZE = config.CHUNK_SIZE;
         SORT_SIZE = config.SORT_SIZE;
@@ -75,13 +77,13 @@ public class Spind {
             attachAttributes(attributes);
             List<SortJob> sortJobs = createSortJobs();
 
-            logger.info("Starting layer: " + layer + " with " + attributes.length + " attributes forming " + "TODO");// candidates.current.keySet().stream().mapToInt(x ->
+            logger.info("Starting layer: " + layer + " with " + attributes.length + " attributes forming " + Arrays.stream(attributes).mapToInt(x -> x.getReferenced() == null ? 0 : x.getReferenced().size()).sum() + " candidates");// candidates.current.keySet().stream().mapToInt(x ->
             // candidates.current.get(x).size()).sum() + " candidates");
             // 3.1) Load all attributes of the candidates.
             clock.start("sorting");
             List<SortResult> sortResults = sortJobs.parallelStream().map(sortJob -> {
                         logger.debug("Starting to sort: " + sortJob.chunkPath());
-                        Sorter sorter = new Sorter(SORT_SIZE, (long) (sortJob.connectedAttributes().size()) * 10 * CHUNK_SIZE/SORT_SIZE);
+                        Sorter sorter = new Sorter(SORT_SIZE, (long) (sortJob.connectedAttributes().size()) * 10 * CHUNK_SIZE / SORT_SIZE);
                         return sorter.process(sortJob, config, filter, layer);
                     }
             ).toList();

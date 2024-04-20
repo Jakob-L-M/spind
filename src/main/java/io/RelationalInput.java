@@ -1,12 +1,13 @@
 package io;
 
+import com.google.common.hash.BloomFilter;
 import com.opencsv.CSVParserBuilder;
 import com.opencsv.CSVReader;
 import com.opencsv.CSVReaderBuilder;
 import com.opencsv.exceptions.CsvValidationException;
-import org.fastfilter.cuckoo.Cuckoo8;
 import runner.Config;
 import structures.Attribute;
+import structures.Hashing;
 import structures.SortJob;
 
 import java.io.BufferedReader;
@@ -87,7 +88,7 @@ public class RelationalInput {
      * Builds the string representation for every attribute combination of the given table and updates the attributes
      * accordingly.
      */
-    public void updateAttributeCombinations(Cuckoo8 filter, int layer) {
+    public void updateAttributeCombinations(BloomFilter<Long> filter, int layer) {
         String[] values = next(filter, layer);
         assert values != null;
 
@@ -132,7 +133,7 @@ public class RelationalInput {
         return !(this.nextLine == null);
     }
 
-    private String[] next(Cuckoo8 filter, int layer) {
+    private String[] next(BloomFilter<Long> filter, int layer) {
         String[] currentLine = this.nextLine;
 
         this.nextLine = readNextLine();
@@ -149,9 +150,9 @@ public class RelationalInput {
         return currentLine;
     }
 
-    private void replaceNonInformative(String[] currentLine, Cuckoo8 filter) {
+    private void replaceNonInformative(String[] currentLine, BloomFilter<Long> filter) {
         for (int i = 0; i < currentLine.length; i++) {
-            if (currentLine[i] != null && !filter.mayContain(currentLine[i].hashCode())) {
+            if (currentLine[i] != null && !filter.mightContain(Hashing.hash(currentLine[i]))) {
                 currentLine[i] = null;
             }
         }

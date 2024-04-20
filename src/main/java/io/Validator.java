@@ -1,6 +1,6 @@
 package io;
 
-import org.fastfilter.cuckoo.Cuckoo8;
+import com.google.common.hash.BloomFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import runner.Config;
@@ -25,7 +25,7 @@ public class Validator {
         logger = LoggerFactory.getLogger(Validator.class);
     }
 
-    public void validate(int layer, Cuckoo8 filter) {
+    public void validate(int layer, BloomFilter<Long> filter) {
 
         candidates.calculateViolations(attributeIndex);
 
@@ -68,7 +68,7 @@ public class Validator {
                     return null;
                 } else {
                     if (layer == 1) {
-                        return new ValidationTuple(valueGroup, (long) group.getKey().hashCode());
+                        return new ValidationTuple(valueGroup, Hashing.hash(group.getKey()));
                     } else {
                         return new ValidationTuple(valueGroup, 0L);
                     }
@@ -76,7 +76,7 @@ public class Validator {
             }).filter(Objects::nonNull).forEach(validationTuple -> {
                 if (layer == 1) {
                     synchronized (filter) {
-                        filter.insert(validationTuple.hash());
+                        filter.put(validationTuple.hash());
                     }
                 }
                 candidates.prune(validationTuple.attributeGroup());
