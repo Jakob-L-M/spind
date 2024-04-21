@@ -35,15 +35,8 @@ public class RelationalInput {
 
         BufferedReader reader = Files.newBufferedReader(relationPath);
 
-        this.CSVReader = new CSVReaderBuilder(reader)
-                .withCSVParser(new CSVParserBuilder()
-                        .withSeparator(config.separator)
-                        .withEscapeChar(config.fileEscape)
-                        .withIgnoreLeadingWhiteSpace(config.ignoreLeadingWhiteSpace)
-                        .withStrictQuotes(config.strictQuotes)
-                        .withQuoteChar(config.quoteChar)
-                        .build())
-                .build();
+        this.CSVReader =
+                new CSVReaderBuilder(reader).withCSVParser(new CSVParserBuilder().withSeparator(config.separator).withEscapeChar(config.fileEscape).withIgnoreLeadingWhiteSpace(config.ignoreLeadingWhiteSpace).withStrictQuotes(config.strictQuotes).withQuoteChar(config.quoteChar).build()).build();
 
         // read the first line
         this.nextLine = readNextLine();
@@ -71,8 +64,7 @@ public class RelationalInput {
 
         BufferedReader reader = Files.newBufferedReader(sortJob.chunkPath());
 
-        this.CSVReader = new CSVReaderBuilder(reader)
-                .withCSVParser(new CSVParserBuilder().withQuoteChar(config.quoteChar).withSeparator(config.separator).build()).build();
+        this.CSVReader = new CSVReaderBuilder(reader).withCSVParser(new CSVParserBuilder().withQuoteChar(config.quoteChar).withSeparator(config.separator).build()).build();
 
         // read the first line
         this.nextLine = readNextLine();
@@ -84,25 +76,28 @@ public class RelationalInput {
 
 
     /**
-     * Builds the string representation for every attribute combination of the given table and updates the attributes
-     * accordingly.
+     * Builds the string representation for every attribute combination of the given relation and updates the attributes accordingly.
+     *
+     * @param filter The Bloom filter used to mask non-informative values.
+     * @param layer The integer indication, in which layer the algorithm currently is.
      */
     public void updateAttributeCombinations(BloomFilter<Integer> filter, int layer) {
         String[] values = next(filter, layer);
         assert values != null;
 
-        attributeLoop:
-        for (Attribute a : attributes) {
-            int[] containedColumns = a.getContainedColumns();
+        attributes.forEach(attribute -> {
+            int[] containedColumns = attribute.getContainedColumns();
 
             for (int column : containedColumns) {
                 if (values[column] == null) {
-                    a.setCurrentValue(null);
-                    continue attributeLoop;
+                    // if any value is null, we set the whole attribute to null.
+                    // this is true since we ensured that all subsets are valid and only mask in the subset mode.
+                    attribute.setCurrentValue(null);
+                    return;
                 }
             }
-            a.setCurrentValue(buildCurrentValue(values, containedColumns));
-        }
+            attribute.setCurrentValue(buildCurrentValue(values, containedColumns));
+        });
     }
 
     private String buildCurrentValue(String[] values, int[] containedColumns) {
