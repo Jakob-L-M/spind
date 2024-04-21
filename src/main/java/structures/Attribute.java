@@ -9,6 +9,7 @@ import java.util.Objects;
 public class Attribute {
     int id;
     int relationId;
+    int numReferencedBy;
     int[] containedColumns;
     String currentValue;
     long currentOccurrences;

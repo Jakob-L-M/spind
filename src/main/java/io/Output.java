@@ -53,7 +53,7 @@ public class Output {
             outputWriter.write(") <=");
             PINDList.PINDIterator it = dependantAttribute.getReferenced().elementIterator();
             while (it.hasNext()) {
-                int refId = it.next().referencedId;
+                int refId = it.next().id;
                 Attribute referredAttribute = attributes[refId];
                 outputWriter.write(" (");
                 for (int i = 0; i < referredAttribute.getContainedColumns().length; i++) {

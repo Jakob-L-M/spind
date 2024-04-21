@@ -41,11 +41,12 @@ public class Candidates {
             while (referenced.hasNext()) {
                 PINDList.PINDElement referencedAttribute = referenced.next();
                 // if the valueGroup includes the referenced Attribute: no violation
-                if (valueGroup.containsKey(referencedAttribute.referencedId)) continue;
+                if (valueGroup.containsKey(referencedAttribute.id)) continue;
 
                 // not null since we iterate over the key set
                 if (referencedAttribute.violate(occurrences) < 0L) {
                     referenced.remove();
+                    current[referencedAttribute.id].numReferencedBy--;
                 }
             }
             if (current[dependantAttributeId].getReferenced().isEmpty()) {
@@ -94,7 +95,7 @@ public class Candidates {
 
                 PINDList.PINDIterator naryRef = current[naryDepId].getReferenced().elementIterator();
                 while (naryRef.hasNext()) {
-                    int naryRefId = naryRef.next().referencedId;
+                    int naryRefId = naryRef.next().id;
                     Attribute naryRefAttribute = attributes[naryRefId];
                     int refRelationId = naryRefAttribute.getRelationId();
 
@@ -179,7 +180,7 @@ public class Candidates {
             HashSet<String> depSet = new HashSet<>();
             PINDList.PINDIterator referencedList = current[depId].getReferenced().elementIterator();
             while (referencedList.hasNext()) {
-                int refId = referencedList.next().referencedId;
+                int refId = referencedList.next().id;
                 String refString = attributes[refId].toString();
                 depSet.add(refString);
             }
@@ -259,7 +260,7 @@ public class Candidates {
             PINDList.PINDIterator referencedIterator = current[dependentAttribute].getReferenced().elementIterator();
             while (referencedIterator.hasNext()) {
 
-                int referencedAttribute = referencedIterator.next().referencedId;
+                int referencedAttribute = referencedIterator.next().id;
 
                 if (attributes[referencedAttribute].getMetadata().totalValues == 0) {
                     // do not safe attributes which are completely empty. They do not carry meaning.
@@ -347,7 +348,7 @@ public class Candidates {
                 PINDList.PINDIterator referenced = current[dependantId].getReferenced().elementIterator();
                 while (referenced.hasNext()) {
                     PINDList.PINDElement ref = referenced.next();
-                    long refNull = attributes[ref.referencedId].getMetadata().nullEntries;
+                    long refNull = attributes[ref.id].getMetadata().nullEntries;
 
                     if (config.nullHandling == Config.NullHandling.FOREIGN) {
                         if (refNull > 0) {
@@ -387,7 +388,9 @@ public class Candidates {
 
             PINDList.PINDIterator referenced = current[dependantId].getReferenced().elementIterator();
             while (referenced.hasNext()) {
-                referenced.next().violationsLeft = maxViolations;
+                PINDList.PINDElement ref = referenced.next();
+                ref.violationsLeft = maxViolations;
+                current[ref.id].numReferencedBy++;
             }
         }
     }

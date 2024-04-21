@@ -63,12 +63,12 @@ public class PINDList {
 
     public static class PINDElement {
 
-        public int referencedId;
+        public int id;
         public long violationsLeft;
         private PINDElement next = null;
 
         public PINDElement(int value, long violationsLeft) {
-            this.referencedId = value;
+            this.id = value;
             this.violationsLeft = violationsLeft;
         }
 
