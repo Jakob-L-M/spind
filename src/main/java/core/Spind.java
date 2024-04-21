@@ -26,7 +26,7 @@ public class Spind {
     final int SORT_SIZE;
     final int MERGE_SIZE;
     final int VALIDATION_SIZE;
-    private final BloomFilter<Integer> filter;
+    private BloomFilter<Integer> filter;
     private final Metrics metrics;
     private final int maxNary;
     final Config config;
@@ -110,7 +110,7 @@ public class Spind {
             // 3.2) Validate candidates.
             clock.start("validation");
             Validator validator = new Validator(config, candidates, VALIDATION_SIZE);
-            validator.validate(layer, filter);
+            filter = validator.validate(layer, filter);
 
             // remove all dependant candidates, that do not reference any attribute
             candidates.cleanCandidates();
