@@ -11,7 +11,7 @@ public class Config {
     public String databaseName;
     public String[] tableNames;
     public String DEFAULT_HEADER_STRING = "column";
-    public String folderPath = "M:\\MA\\data\\";
+    public String folderPath = "D:\\MA\\data\\";
     public String tempFolder = "D:\\MA\\temp";
     public String resultFolder = ".\\results";
     public String fileEnding = ".csv";
@@ -29,7 +29,8 @@ public class Config {
     public DuplicateHandling duplicateHandling = DuplicateHandling.AWARE;
     public NullHandling nullHandling = NullHandling.SUBSET;
 
-    public boolean refineFilter = true; // if the bloom filter should be reconstructed in every layer
+    public boolean refineFilter = true; // whether the bloom filter should be reconstructed in every layer
+    public boolean useFilter = false; // whether the bloom filter should be used
 
     public Config(Config.Dataset dataset, double threshold) {
         this.setDataset(dataset);

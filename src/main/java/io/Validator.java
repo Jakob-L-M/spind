@@ -36,7 +36,7 @@ public class Validator {
             candidates.pruneGlobalUnique(attributeIndex);
         }
 
-        if (config.refineFilter) {
+        if (config.useFilter && config.refineFilter) {
             filter = BloomFilter.create(Funnels.integerFunnel(), 100_000_000, 0.05);
         }
 
@@ -106,7 +106,7 @@ public class Validator {
                 }
 
             }).filter(Objects::nonNull).forEach(validationTuple -> {
-                if (layer == 1 || config.refineFilter) {
+                if (config.useFilter && (layer == 1 || config.refineFilter)) {
                     synchronized (filter) {
                         for (int hash : validationTuple.hashes()) {
                             filter.put(hash);

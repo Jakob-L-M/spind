@@ -45,7 +45,7 @@ public class Spind {
         maxNary = config.maxNary;
         this.output = new Output(config.resultFolder);
         this.logger = LoggerFactory.getLogger(Spind.class);
-        this.filter = BloomFilter.create(Funnels.integerFunnel(), 100_000_000, 0.05);
+        if (config.useFilter) this.filter = BloomFilter.create(Funnels.integerFunnel(), 100_000_000, 0.05);
 
         CHUNK_SIZE = config.CHUNK_SIZE;
         SORT_SIZE = config.SORT_SIZE;

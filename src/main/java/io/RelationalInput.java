@@ -136,7 +136,7 @@ public class RelationalInput {
             readToNextValidLine();
         }
 
-        if (layer > 1) {
+        if (config.useFilter && layer > 1) {
             replaceNonInformative(currentLine, filter);
         }
 
