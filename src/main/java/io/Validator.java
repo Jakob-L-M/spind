@@ -68,40 +68,43 @@ public class Validator {
             valueGroupMap.entrySet().stream().parallel().map(group -> {
                 HashMap<Integer, Long> valueGroup = buildAttributeMap(group.getValue().toString());
                 boolean onlyRef = true;
-                // TODO: idea -> maybe already remove non-interesting attributes here.
-                for (int attributeId : valueGroup.keySet()) {
-                    if (attributeIndex[attributeId].getReferenced() != null) {
+                Iterator<Integer> keyIterator = valueGroup.keySet().iterator();
+                while (keyIterator.hasNext()) {
+                    Attribute next = attributeIndex[keyIterator.next()];
+                    if (next.getReferenced() != null) {
+                        // If there is at least one attribute from a dependent side, we need to prune the group
                         onlyRef = false;
-                        break;
+                    } else if (next.getNumReferencedBy() == 0) {
+                        // This attribute neither references another attribute nor is it referenced by any attribute.
+                        keyIterator.remove();
                     }
                 }
                 if (onlyRef) {
+                    // if we only find attribute that occur as a reference (or are irrelevant) we can skip pruning.
                     return null;
-                } else {
-                    if (layer == 1) {
-                        return new ValidationTuple(valueGroup, new int[]{group.getKey().hashCode()});
-                    }
-                    else if (config.refineFilter) {
-                        String raw = group.getKey();
-                        int[] hashes = new int[layer];
-                        int lengthEnc = raw.indexOf('|')+1;
-                        String[] lengths = raw.substring(0, lengthEnc-1).split(":");
-                        assert lengths.length == layer -1;
-                        for (int i = 0; i < layer - 1; i++) {
-                            int valueLength = Integer.parseInt(lengths[i]);
-                            String s = raw.substring(lengthEnc, lengthEnc+valueLength);
-                            hashes[i] = s.hashCode();
-                            lengthEnc += valueLength;
-                        }
-                        String s = raw.substring(lengthEnc);
-                        hashes[layer -1] = s.hashCode();
-
-                        return new ValidationTuple(valueGroup, hashes);
-                    }
-                    else {
-                        return new ValidationTuple(valueGroup, null);
-                    }
                 }
+                if (layer == 1) {
+                    return new ValidationTuple(valueGroup, new int[]{group.getKey().hashCode()});
+                } else if (config.refineFilter) {
+                    String raw = group.getKey();
+                    int[] hashes = new int[layer];
+                    int lengthEnc = raw.indexOf('|') + 1;
+                    String[] lengths = raw.substring(0, lengthEnc - 1).split(":");
+                    assert lengths.length == layer - 1;
+                    for (int i = 0; i < layer - 1; i++) {
+                        int valueLength = Integer.parseInt(lengths[i]);
+                        String s = raw.substring(lengthEnc, lengthEnc + valueLength);
+                        hashes[i] = s.hashCode();
+                        lengthEnc += valueLength;
+                    }
+                    String s = raw.substring(lengthEnc);
+                    hashes[layer - 1] = s.hashCode();
+
+                    return new ValidationTuple(valueGroup, hashes);
+                } else {
+                    return new ValidationTuple(valueGroup, null);
+                }
+
             }).filter(Objects::nonNull).forEach(validationTuple -> {
                 if (layer == 1 || config.refineFilter) {
                     synchronized (filter) {

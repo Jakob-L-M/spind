@@ -1,7 +1,5 @@
 package runner;
 
-import java.io.File;
-
 public class Config {
 
     public final double threshold;

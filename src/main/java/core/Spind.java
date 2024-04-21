@@ -119,6 +119,12 @@ public class Spind {
             logger.info("Found " + calcPINDs(attributes) + " pINDs at level " + layer);
             output.storePINDs(relationMetadata, attributes, layer, config);
 
+            // clean relation files
+            for (RelationMetadata relation : relationMetadata) {
+                Path relationFile = Path.of(config.tempFolder + File.separator + "relation_" + relation.relationId + ".txt");
+                if (Files.exists(relationFile)) Files.delete(relationFile);
+            }
+
             if (maxNary > 0 && layer == maxNary) break;
 
             // 3.4) Generate new attributes for next layer.
@@ -132,7 +138,6 @@ public class Spind {
             for (Path chunk : relation.chunks) {
                 Files.delete(chunk);
             }
-            Files.delete(Path.of(config.tempFolder + File.separator + "relation_" + relation.relationId + ".txt"));
         }
 
         // 4) Save the output
