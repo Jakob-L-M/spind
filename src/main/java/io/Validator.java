@@ -1,6 +1,7 @@
 package io;
 
 import com.google.common.hash.BloomFilter;
+import com.google.common.hash.Funnels;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import runner.Config;
@@ -25,7 +26,7 @@ public class Validator {
         logger = LoggerFactory.getLogger(Validator.class);
     }
 
-    public void validate(int layer, BloomFilter<Integer> filter) {
+    public BloomFilter<Integer> validate(int layer, BloomFilter<Integer> filter) {
 
         candidates.calculateViolations(attributeIndex);
 
@@ -35,6 +36,16 @@ public class Validator {
             candidates.pruneGlobalUnique(attributeIndex);
         }
 
+        if (config.refineFilter) {
+            filter = BloomFilter.create(Funnels.integerFunnel(), 100_000_000, 0.05);
+        }
+
+        parallelPrune(layer, filter);
+
+        return filter;
+    }
+
+    private void parallelPrune(int layer, BloomFilter<Integer> filter) {
         while (!readers.isEmpty()) {
             String maxValue = updateReaders(); // parallel
             HashMap<String, StringBuilder> valueGroupMap = new HashMap<>();
@@ -68,15 +79,35 @@ public class Validator {
                     return null;
                 } else {
                     if (layer == 1) {
-                        return new ValidationTuple(valueGroup, group.getKey().hashCode());
-                    } else {
-                        return new ValidationTuple(valueGroup, 0);
+                        return new ValidationTuple(valueGroup, new int[]{group.getKey().hashCode()});
+                    }
+                    else if (config.refineFilter) {
+                        String raw = group.getKey();
+                        int[] hashes = new int[layer];
+                        int lengthEnc = raw.indexOf('|')+1;
+                        String[] lengths = raw.substring(0, lengthEnc-1).split(":");
+                        assert lengths.length == layer -1;
+                        for (int i = 0; i < layer - 1; i++) {
+                            int valueLength = Integer.parseInt(lengths[i]);
+                            String s = raw.substring(lengthEnc, lengthEnc+valueLength);
+                            hashes[i] = s.hashCode();
+                            lengthEnc += valueLength;
+                        }
+                        String s = raw.substring(lengthEnc);
+                        hashes[layer -1] = s.hashCode();
+
+                        return new ValidationTuple(valueGroup, hashes);
+                    }
+                    else {
+                        return new ValidationTuple(valueGroup, null);
                     }
                 }
             }).filter(Objects::nonNull).forEach(validationTuple -> {
-                if (layer == 1) {
+                if (layer == 1 || config.refineFilter) {
                     synchronized (filter) {
-                        filter.put(validationTuple.hash());
+                        for (int hash : validationTuple.hashes()) {
+                            filter.put(hash);
+                        }
                     }
                 }
                 candidates.prune(validationTuple.attributeGroup());
