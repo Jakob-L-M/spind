@@ -1,5 +1,5 @@
 # Hyperparameter Optimization
-To utilize the full potential of _SPIND_, we will search for the best performing set of hyperparameter. The execution relies on four user chosen parameters.`CHUNK_SIZE`, `MERGE_SIZE`, `SORT_SIZE` and `VALIDATION_SIZE`. Additionally, the `PARALLEL` degree can be set globally for the execution.
+To utilize the full potential of _SPIND_, we will search for the best performing set of hyperparameter. The execution relies on five user chosen parameters.`CHUNK_SIZE`, `MERGE_SIZE`, `SORT_SIZE` and `VALIDATION_SIZE`. Additionally, the `PARALLEL` degree can be set globally for the execution.
 
 ## Parameter Bounds
 - `CHUNK_SIZE` is lower bounded by 10.000 to avoid the creation of massive amounts of files. The upper bound will be 100mil since we already showed that the creation of chunks generally improves performance.
