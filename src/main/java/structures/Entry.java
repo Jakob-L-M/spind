@@ -49,6 +49,18 @@ class Entry implements Comparable<Entry> {
         buildAttributeMap(serializedAttributes);
     }
 
+    public void load(HashMap<Integer, Long> groupAttributes) {
+        String[] attributes = serializedAttributes.split(";");
+        for (String attribute : attributes) {
+            String[] idOccurrenceTuple = attribute.split(",");
+            if (idOccurrenceTuple.length != 2) {
+                continue;
+            }
+            long occurrences = Long.parseLong(idOccurrenceTuple[1]);
+            groupAttributes.compute(Integer.valueOf(idOccurrenceTuple[0]), (k, v) -> v == null ? occurrences : v + occurrences);
+        }
+    }
+
     private void buildAttributeMap(String part) {
         connectedAttributes = new HashMap<>();
         String[] attributes = part.split(";");

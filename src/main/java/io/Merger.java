@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.PriorityQueue;
 
 /**
@@ -58,11 +59,11 @@ public class Merger {
                 if (!previous.equals(current)) {
                     // the previous value (group) is different -> safe value (group) to disk
                     writeValue(containedAttributes, attributes, output, previous, isFinal);
+                    if (!containedAttributes.isEmpty()) containedAttributes = new HashMap<>();
                 } else {
                     // the current value still belongs to the value group.
                     // load previous and add to connected attributes
-                    previous.load();
-                    previous.getConnectedAttributes().forEach((k, v) -> containedAttributes.merge(k, v, Long::sum));
+                    previous.load(containedAttributes);
                 }
                 // update previous
                 previous = current;
@@ -113,19 +114,16 @@ public class Merger {
             }
         } else {
             // Case 2: there are multiple attributes from multiple files in the group
-            previous.load(); // add the last member
-            previous.getConnectedAttributes().forEach((k, v) -> containedAttributes.merge(k, v, Long::sum));
-            for (Integer attribute : containedAttributes.keySet()) {
-                long occurrences = containedAttributes.get(attribute);
+            previous.load(containedAttributes); // add the last member
+            for (Map.Entry<Integer, Long> attribute : containedAttributes.entrySet()) {
 
-                writeAttribute(output, attribute, occurrences);
+                writeAttribute(output, attribute.getKey(), attribute.getValue());
 
                 if (isFinal) {
-                    attributes[attribute].getMetadata().totalValues += occurrences;
-                    attributes[attribute].getMetadata().uniqueValues++;
+                    attributes[attribute.getKey()].getMetadata().totalValues += attribute.getValue();
+                    attributes[attribute.getKey()].getMetadata().uniqueValues++;
                 }
             }
-            containedAttributes.clear();
         }
 
         output.newLine();
