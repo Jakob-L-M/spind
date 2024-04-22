@@ -73,16 +73,17 @@ public class Candidates {
         HashMap<Attribute, Integer> nextAttributes = new HashMap<>();
         HashMap<Integer, PINDList> nextCandidates = new HashMap<>();
         this.nextAttributeId = 0;
-        for (int naryDepId = 0; naryDepId < current.length; naryDepId++) {
+        Arrays.stream(current).parallel().forEach(naryDepAttribute -> {
+
+            int naryDepId = naryDepAttribute.id;
 
             if (current[naryDepId].getReferenced() == null) {
-                continue;
+                return;
             }
 
-            Attribute naryDepAttribute = attributes[naryDepId];
 
             if (naryDepAttribute.getMetadata().totalValues == 0) {
-                continue;
+                return;
             }
 
             int depRelationId = naryDepAttribute.getRelationId();
@@ -135,17 +136,21 @@ public class Candidates {
                         }
 
                         // valid candidate found
-                        Attribute dependant = generateAttribute(naryDepAttribute, unaryDepColumn, nextAttributes);
+                        synchronized (nextAttributes) {
+                            synchronized (nextCandidates) {
+                                Attribute dependant = generateAttribute(naryDepAttribute, unaryDepColumn, nextAttributes);
 
-                        Attribute referenced = generateAttribute(naryRefAttribute, unaryRefColumn, nextAttributes);
+                                Attribute referenced = generateAttribute(naryRefAttribute, unaryRefColumn, nextAttributes);
 
-                        PINDList referencedList = nextCandidates.computeIfAbsent(dependant.getId(), k -> new PINDList());
-                        referencedList.add(referenced.getId(), 0); // violations are handled elsewhere
+                                PINDList referencedList = nextCandidates.computeIfAbsent(dependant.getId(), k -> new PINDList());
+                                referencedList.add(referenced.getId(), 0); // violations are handled elsewhere
+                            }
+                        }
                     }
 
                 }
             }
-        }
+        });
         return constructIndices(nextAttributes, nextCandidates);
     }
 
@@ -214,8 +219,11 @@ public class Candidates {
 
             Set<String> refSet = lookup.get(depString.toString());
             if (refSet == null || !refSet.contains(refString.toString())) {
-                logger.debug("Skipped candidate. " + depRelationId + ": " + Arrays.toString(dependantColumns) + " -> "
-                        + refRelationId + ": " + Arrays.toString(referencedColumns));
+                /*
+                Avoid many calls to the logger
+                 logger.debug("Skipped candidate. " + depRelationId + ": " + Arrays.toString(dependantColumns) + " -> " + refRelationId + ": " + Arrays.toString
+                 (referencedColumns));
+                */
                 return false;
             }
         }
