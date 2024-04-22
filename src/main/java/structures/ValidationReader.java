@@ -12,6 +12,8 @@ import java.util.ArrayDeque;
 public class ValidationReader {
     private final BufferedReader reader;
     private final int size;
+    private String nextLine;
+    private String nextOccurrence;
     public ArrayDeque<Entry> queue;
     public boolean finished;
 
@@ -20,10 +22,15 @@ public class ValidationReader {
      * @param queueSize    the number of (sorted) values to buffer
      * @throws FileNotFoundException if the relation file could not be accessed.
      */
-    public ValidationReader(String relationPath, int queueSize) throws FileNotFoundException {
+    public ValidationReader(String relationPath, int queueSize) throws IOException {
         this.reader = new BufferedReader(new FileReader(relationPath));
         this.queue = new ArrayDeque<>(queueSize); // we know exactly how much the queue can grow
         this.size = queueSize;
+
+        // we guarantee that there are always at least two lanes per file.
+        this.nextLine = reader.readLine();
+        this.nextOccurrence = reader.readLine();
+
         finished = false;
     }
 
@@ -38,12 +45,15 @@ public class ValidationReader {
             return queue.getLast().getValue();
         }
 
-        String nextLine = null;
         try {
             // load the next values until the queue has been refilled or the input ran out.
-            while (queue.size() < size && (nextLine = reader.readLine()) != null) {
+            while (queue.size() < size && nextLine != null) {
                 // do not deserialize the connected attributes yet.
-                queue.add(new Entry(nextLine, reader.readLine()));
+                queue.add(new Entry(nextLine, nextOccurrence));
+
+                // update look ahead
+                nextLine = reader.readLine();
+                if (nextLine != null) nextOccurrence = reader.readLine();
             }
         } catch (IOException e) {
             e.printStackTrace();

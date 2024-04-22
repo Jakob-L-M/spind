@@ -9,6 +9,8 @@ import structures.*;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 
 public class Validator {
@@ -142,7 +144,10 @@ public class Validator {
         List<Integer> relations = Arrays.stream(attributeIndex).mapToInt(Attribute::getRelationId).distinct().boxed().toList();
         readers = new ArrayList<>();
         for (int relation : relations) {
-            readers.add(new ValidationReader(config.tempFolder + File.separator + "relation_" + relation + ".txt", validationSize));
+            String relationPath = config.tempFolder + File.separator + "relation_" + relation + ".txt";
+            // in a rare edge case, a relation file might not exist. This can happen if the relation is only used in dependant sides of all-null references and the filter masks
+            // all values. Therefor the sorting process finishes without a single value (which is correct) and no relation is created while merging.
+            if (Files.exists(Path.of(relationPath))) readers.add(new ValidationReader(relationPath, validationSize));
         }
     }
 
