@@ -73,32 +73,37 @@ public class Output {
     }
 
     /**
-     *
      * @param config
      * @param clock
      * @param metrics
      * @throws IOException
      */
     public void storeMetadata(Config config, Clock clock, Metrics metrics) throws IOException {
-        BufferedWriter outputWriter = Files.newBufferedWriter(Path.of(this.resultFolder + File.separator + config.executionName + "_" + (System.currentTimeMillis() / 1000) + ".json"),
+        BufferedWriter outputWriter = Files.newBufferedWriter(Path.of(this.resultFolder + File.separator + config.executionName + "_" + (System.currentTimeMillis() / 1000) +
+                        ".json"),
                 StandardOpenOption.TRUNCATE_EXISTING,
                 StandardOpenOption.CREATE);
 
-        outputWriter.write("{\"config\": {" +
+        outputWriter.write("{" +
                 "\"Dataset\":\"" + config.databaseName + '"' +
                 ",\"threshold\":" + config.threshold +
                 ",\"max n-ary\":" + config.maxNary +
+                ",\"relations\":" + config.tableNames.length +
+                ",\"attributes\":" + metrics.layerAttributes.get(0) +
+                ",\"unary\":" + metrics.unary +
+                ",\"n-ary\":" + metrics.nary +
+                ",\"attributes_per_layer\":" + metrics.layerAttributes +
+                ",\"candidates_per_layer\":" + metrics.layerCandidates +
+                ",\"pINDs_per_layer\":" + metrics.layerPINDs +
                 ",\"CHUNK_SIZE\":" + config.CHUNK_SIZE +
                 ",\"SORT_SIZE\":" + config.SORT_SIZE +
                 ",\"MERGE_SIZE\":" + config.MERGE_SIZE +
                 ",\"VALIDATION_SIZE\":" + config.VALIDATION_SIZE +
-                "},");
-        outputWriter.write("\"total_time\":" + clock.stop("total"));
-        outputWriter.write(",\"files\": {" +
-                "\"CHUNK_FILES\":" + metrics.chunkFiles +
+                ",\"total_time\":" + clock.stop("total") +
+                ",\"CHUNK_FILES\":" + metrics.chunkFiles +
                 ",\"SORT_FILES\":" + metrics.sortFiles +
                 ",\"MERGE_FILES\":" + metrics.mergeFiles +
-                "}}");
+                "}");
         outputWriter.close();
     }
 }

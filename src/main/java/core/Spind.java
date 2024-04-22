@@ -77,7 +77,12 @@ public class Spind {
             attachAttributes(attributes);
             List<SortJob> sortJobs = createSortJobs();
 
-            logger.info("Starting layer: " + layer + " with " + attributes.length + " attributes forming " + Arrays.stream(attributes).mapToInt(x -> x.getReferenced() == null ? 0 : x.getReferenced().size()).sum() + " candidates");// candidates.current.keySet().stream().mapToInt(x ->
+            int numAttributes = attributes.length;
+            int numCandidates = Arrays.stream(attributes).mapToInt(x -> x.getReferenced() == null ? 0 : x.getReferenced().size()).sum();
+
+            metrics.layerAttributes.add(numAttributes);
+            metrics.layerCandidates.add(numCandidates);
+            logger.info("Starting layer: " + layer + " with " + numAttributes + " attributes forming " + numCandidates + " candidates");
             // candidates.current.get(x).size()).sum() + " candidates");
             // 3.1) Load all attributes of the candidates.
             clock.start("sorting");
@@ -116,7 +121,12 @@ public class Spind {
             candidates.cleanCandidates();
             logger.info("Finished validation. Took: " + clock.stop("validation") + "ms");
 
-            logger.info("Found " + calcPINDs(attributes) + " pINDs at level " + layer);
+            int numPINDs = calcPINDs(attributes);
+            metrics.layerPINDs.add(numPINDs);
+            if (layer == 1) metrics.unary = numPINDs;
+            else metrics.nary += numPINDs;
+
+            logger.info("Found " + numPINDs + " pINDs at level " + layer);
             output.storePINDs(relationMetadata, attributes, layer, config);
 
             // clean relation files
