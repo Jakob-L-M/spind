@@ -4,7 +4,6 @@ import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
 import io.Merger;
 import io.Output;
-import io.Sorter;
 import io.Validator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +15,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * @noinspection UnstableApiUsage
@@ -52,7 +54,7 @@ public class Spind {
         VALIDATION_SIZE = config.VALIDATION_SIZE;
     }
 
-    public void execute() throws IOException {
+    public void execute() throws IOException, InterruptedException {
 
         logger.info("Starting execution");
 
@@ -85,12 +87,24 @@ public class Spind {
             // candidates.current.get(x).size()).sum() + " candidates");
             // 3.1) Load all attributes of the candidates.
             clock.start("sorting");
+            ExecutorService executors = Executors.newFixedThreadPool(config.PARALLEL);
+            List<SortResult> sortResults = executors.invokeAll(sortJobs.stream().sorted().toList()).stream().map(sortResultFuture -> {
+                try {
+                    return sortResultFuture.get();
+                } catch (InterruptedException | ExecutionException e) {
+                    e.printStackTrace();
+                    return new SortResult(null, null);
+                }
+            }).toList();
+            executors.shutdown();
+            /*
             List<SortResult> sortResults = sortJobs.parallelStream().map(sortJob -> {
                         logger.debug("Starting to sort: " + sortJob.chunkPath());
                         Sorter sorter = new Sorter(SORT_SIZE, (long) (sortJob.connectedAttributes().size()) * 10 * CHUNK_SIZE / SORT_SIZE);
                         return sorter.process(sortJob, config, filter, layer);
                     }
             ).toList();
+            */
             logger.info("Finished sorting. Took: " + clock.stop("sorting") + "ms");
 
             metrics.sortFiles += sortResults.stream().mapToInt(sortResult -> sortResult.mergeJob().chunkPaths().size()).sum();
@@ -141,7 +155,6 @@ public class Spind {
             attributes = candidates.generateNextLayer(attributes, relationMetadata, layer);
             logger.info("Finished generating next layer. Took: " + clock.stop("generateNext") + "ms");
         }
-
         // clean up temp
         Arrays.stream(Objects.requireNonNull((new File(config.tempFolder)).listFiles())).forEach(File::delete);
 
@@ -268,7 +281,7 @@ public class Spind {
                 continue;
             }
             for (Path chunkPath : relation.chunks) {
-                jobs.add(new SortJob(chunkPath, relation.connectedAttributes, relation.relationId));
+                jobs.add(new SortJob(chunkPath, relation.connectedAttributes, relation.relationId, config.SORT_SIZE, config.CHUNK_SIZE, config, filter, layer));
             }
         }
 
