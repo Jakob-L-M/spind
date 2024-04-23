@@ -15,26 +15,25 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
-/** @noinspection UnstableApiUsage*/
+/**
+ * @noinspection UnstableApiUsage
+ */
 public class Spind {
     final int CHUNK_SIZE;
     final int SORT_SIZE;
     final int MERGE_SIZE;
     final int VALIDATION_SIZE;
-    private BloomFilter<Integer> filter;
+    final Config config;
     private final Metrics metrics;
     private final int maxNary;
-    final Config config;
     private final Logger logger;
     private final Output output;
     private final Clock clock;
     RelationMetadata[] relationMetadata;
     int layer;
+    private BloomFilter<Integer> filter;
 
     public Spind(Config config) {
         this.clock = new Clock();
@@ -143,12 +142,8 @@ public class Spind {
             logger.info("Finished generating next layer. Took: " + clock.stop("generateNext") + "ms");
         }
 
-        // clean chunks
-        for (RelationMetadata relation : relationMetadata) {
-            for (Path chunk : relation.chunks) {
-                Files.delete(chunk);
-            }
-        }
+        // clean up temp
+        Arrays.stream(Objects.requireNonNull((new File(config.tempFolder)).listFiles())).forEach(File::delete);
 
         // 4) Save the output
         output.storeMetadata(config, clock, metrics);
@@ -218,13 +213,8 @@ public class Spind {
 
         int relationOffset = 0;
         for (int relationId = 0; relationId < config.tableNames.length; relationId++) {
-            relationMetadata[relationId] = new RelationMetadata(
-                    config.tableNames[relationId],
-                    relationId,
-                    relationOffset,
-                    Path.of(config.folderPath + File.separator + config.databaseName + File.separator + config.tableNames[relationId] + config.fileEnding),
-                    config
-            );
+            relationMetadata[relationId] = new RelationMetadata(config.tableNames[relationId], relationId, relationOffset,
+                    Path.of(config.folderPath + File.separator + config.databaseName + File.separator + config.tableNames[relationId] + config.fileEnding), config);
             relationOffset += relationMetadata[relationId].columnNames.length;
         }
 
@@ -251,11 +241,7 @@ public class Spind {
         for (RelationMetadata input : relationMetadata) {
             int relationOffset = input.relationOffset;
             for (int i = 0; i < input.columnNames.length; i++) {
-                attributes[relationOffset + i] = new Attribute(
-                        relationOffset + i,
-                        input.relationId,
-                        new int[]{i}
-                );
+                attributes[relationOffset + i] = new Attribute(relationOffset + i, input.relationId, new int[]{i});
             }
         }
         return attributes;

@@ -3,6 +3,7 @@ package runner;
 public class Config {
 
     public final double threshold;
+    public int PARALLEL = Runtime.getRuntime().availableProcessors(); // or specify your desired parallelism level
     public int VALIDATION_SIZE = 10_000;
     public int MERGE_SIZE = 200;
     public int CHUNK_SIZE = 5_000_000;
@@ -12,7 +13,7 @@ public class Config {
     public String[] tableNames;
     public String DEFAULT_HEADER_STRING = "column";
     public String folderPath = "M:\\MA\\data\\";
-    public String tempFolder = "D:\\MA\\temp";
+    public String tempFolder = "E:\\temp";
     public String resultFolder = ".\\results";
     public String fileEnding = ".csv";
     public char separator = ',';
@@ -30,7 +31,7 @@ public class Config {
     public NullHandling nullHandling = NullHandling.SUBSET;
 
     public boolean refineFilter = true; // whether the bloom filter should be reconstructed in every layer
-    public boolean useFilter = false; // whether the bloom filter should be used
+    public boolean useFilter = true; // whether the bloom filter should be used
 
     public Config(Config.Dataset dataset, double threshold) {
         this.setDataset(dataset);

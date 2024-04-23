@@ -87,6 +87,7 @@ public class Output {
         outputWriter.write("{" +
                 "\"Dataset\":\"" + config.databaseName + '"' +
                 ",\"threshold\":" + config.threshold +
+                ",\"parallelism\":" + config.PARALLEL +
                 ",\"max n-ary\":" + config.maxNary +
                 ",\"relations\":" + config.tableNames.length +
                 ",\"attributes\":" + metrics.layerAttributes.get(0) +
@@ -103,6 +104,8 @@ public class Output {
                 ",\"CHUNK_FILES\":" + metrics.chunkFiles +
                 ",\"SORT_FILES\":" + metrics.sortFiles +
                 ",\"MERGE_FILES\":" + metrics.mergeFiles +
+                ",\"use_filter\":" + config.useFilter +
+                ",\"refine_filter\":" + config.refineFilter +
                 "}");
         outputWriter.close();
     }
