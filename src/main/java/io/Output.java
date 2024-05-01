@@ -101,6 +101,10 @@ public class Output {
                 ",\"MERGE_SIZE\":" + config.MERGE_SIZE +
                 ",\"VALIDATION_SIZE\":" + config.VALIDATION_SIZE +
                 ",\"total_time\":" + clock.stop("total") +
+                ",\"sort_times\":" + clock.measures.get("sorting") +
+                ",\"merge_times\":" + clock.measures.get("merging") +
+                ",\"validate_times\":" + clock.measures.get("validation") +
+                ",\"generate_times\":" + clock.measures.get("generateNext") +
                 ",\"CHUNK_FILES\":" + metrics.chunkFiles +
                 ",\"SORT_FILES\":" + metrics.sortFiles +
                 ",\"MERGE_FILES\":" + metrics.mergeFiles +

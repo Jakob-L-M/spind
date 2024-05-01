@@ -3,11 +3,12 @@ package structures;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Clock {
 
+    public final Map<String, List<Long>> measures;
     HashMap<String, Long> clocks;
-    HashMap<String, List<Long>> measures;
 
     public Clock() {
         clocks = new HashMap<>();
