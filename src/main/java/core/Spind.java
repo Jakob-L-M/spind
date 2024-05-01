@@ -23,10 +23,6 @@ import java.util.concurrent.Executors;
  * @noinspection UnstableApiUsage
  */
 public class Spind {
-    final int CHUNK_SIZE;
-    final int SORT_SIZE;
-    final int MERGE_SIZE;
-    final int VALIDATION_SIZE;
     final Config config;
     private final Metrics metrics;
     private final int maxNary;
@@ -47,11 +43,6 @@ public class Spind {
         this.output = new Output(config.resultFolder);
         this.logger = LoggerFactory.getLogger(Spind.class);
         if (config.useFilter) this.filter = BloomFilter.create(Funnels.integerFunnel(), 100_000_000, 0.05);
-
-        CHUNK_SIZE = config.CHUNK_SIZE;
-        SORT_SIZE = config.SORT_SIZE;
-        MERGE_SIZE = config.MERGE_SIZE;
-        VALIDATION_SIZE = config.VALIDATION_SIZE;
     }
 
     public void execute() throws IOException, InterruptedException {
@@ -97,14 +88,7 @@ public class Spind {
                 }
             }).toList();
             executors.shutdown();
-            /*
-            List<SortResult> sortResults = sortJobs.parallelStream().map(sortJob -> {
-                        logger.debug("Starting to sort: " + sortJob.chunkPath());
-                        Sorter sorter = new Sorter(SORT_SIZE, (long) (sortJob.connectedAttributes().size()) * 10 * CHUNK_SIZE / SORT_SIZE);
-                        return sorter.process(sortJob, config, filter, layer);
-                    }
-            ).toList();
-            */
+
             logger.info("Finished sorting. Took: " + clock.stop("sorting") + "ms");
 
             metrics.sortFiles += sortResults.stream().mapToInt(sortResult -> sortResult.mergeJob().chunkPaths().size()).sum();
@@ -122,12 +106,12 @@ public class Spind {
             List<MergeJob> mergeJobs = sortResults.stream().map(SortResult::mergeJob).toList();
 
             clock.start("merging");
-            iterativeMerge(attributes, mergeJobs);
+            int activeRelations = iterativeMerge(attributes, mergeJobs);
             logger.info("Finished merging. Took: " + clock.stop("merging") + "ms");
 
             // 3.2) Validate candidates.
             clock.start("validation");
-            Validator validator = new Validator(config, candidates, VALIDATION_SIZE);
+            Validator validator = new Validator(config, candidates, config.VALIDATION_SIZE / activeRelations);
             filter = validator.validate(layer, filter);
 
             // remove all dependant candidates, that do not reference any attribute
@@ -162,7 +146,9 @@ public class Spind {
         output.storeMetadata(config, clock, metrics);
     }
 
-    private void iterativeMerge(Attribute[] attributes, List<MergeJob> mergeJobs) {
+    private int iterativeMerge(Attribute[] attributes, List<MergeJob> mergeJobs) {
+        int activeRelations = 1;
+        int merge = config.MERGE_SIZE / config.PARALLEL;
         while (!mergeJobs.isEmpty()) {
             // 1) group by relation
             List<MergeJob> groupedMergeJobs = new ArrayList<>();
@@ -182,17 +168,18 @@ public class Spind {
                     continue;
                 }
                 int n = job.chunkPaths().size();
-                if (n >= MERGE_SIZE) {
+                if (n >= merge) {
                     // Case 1: The number of files exceeds the merge size threshold -> Merge subsets of the spilled files and re-add then to the next iteration
                     List<Path> nextPaths = new ArrayList<>();
-                    for (int i = 0; i < n; i += MERGE_SIZE) {
+                    for (int i = 0; i < n; i += merge) {
                         Path resultPath = Path.of(job.chunkPaths().get(i) + "_m_" + i + ".txt");
-                        currentJobs.add(new MergeJob(new ArrayList<>(job.chunkPaths().subList(i, Math.min(i + MERGE_SIZE, n))), job.relationId(), resultPath, false));
+                        currentJobs.add(new MergeJob(new ArrayList<>(job.chunkPaths().subList(i, Math.min(i + merge, n))), job.relationId(), resultPath, false));
                         nextPaths.add(resultPath);
                     }
                     nextJobs.add(new MergeJob(nextPaths, job.relationId(), null, false));
                 } else {
                     // Case 2: The number of files does not exceed the threshold -> the next merge finishes the relation file.
+                    activeRelations++;
                     Path resultPath = Path.of(config.tempFolder + File.separator + "relation_" + job.relationId() + ".txt");
                     currentJobs.add(new MergeJob(job.chunkPaths(), job.relationId(), resultPath, true));
                 }
@@ -209,6 +196,7 @@ public class Spind {
             });
             mergeJobs = nextJobs;
         }
+        return activeRelations;
     }
 
     private int calcPINDs(Attribute[] attributes) {
@@ -236,7 +224,7 @@ public class Spind {
         Arrays.stream(relationMetadata).parallel().forEach(relation -> {
             long sTime = System.currentTimeMillis();
             try {
-                relation.createChunks(CHUNK_SIZE / relation.columnNames.length, config);
+                relation.createChunks(config.CHUNK_SIZE / relation.columnNames.length, config);
             } catch (IOException e) {
                 e.printStackTrace();
             }
