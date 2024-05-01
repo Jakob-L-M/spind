@@ -125,49 +125,35 @@ public class Sorter {
      * Writes a processed output file
      *
      * @param outputPath The path to which the file is written. Will overwrite an existing file.
+     * @param isFinal    A flag to indicate if the data to spill is the final action of the sorter.
      */
     private void toDisk(Path outputPath, boolean isFinal) {
         try {
             BufferedWriter writer = Files.newBufferedWriter(outputPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
 
-            List<Map.Entry<String, HashMap<Integer, Long>>> entriesToSpill;
-            if (!isFinal) {
-                entriesToSpill = values.entrySet().stream()
-                        // only spill values where the occurrences are smaller than some threshold
-                        .filter(entry -> entry.getValue().values().stream().reduce(0L, Long::sum) < minKeepCount)
-                        .sorted(Map.Entry.comparingByKey()).toList();
-
-                // clean and adjust the values and tracked nested size
-                entriesToSpill.forEach(entry -> values.remove(entry.getKey()));
-                currentSize -= entriesToSpill.stream().mapToInt(entry -> entry.getValue().size()).sum();
-
-            } else {
-                entriesToSpill = values.entrySet().stream().sorted(Map.Entry.comparingByKey()).toList();
-                values = null;
-            }
-
-            if (isFinal) {
-                logger.debug("Spilling " + entriesToSpill.size() + " values to " + outputPath);
-            } else {
-                logger.debug("Spilling " + entriesToSpill.size() + " values to " + outputPath + ". Keeping " + currentSize + " connected attributes.");
-            }
-
-            for (Map.Entry<String, HashMap<Integer, Long>> entry : entriesToSpill) {
-                writer.write(entry.getKey());
-                writer.newLine(); // separate the value and the serialized attributes by a new line
-                entry.getValue().forEach((k, v) -> {
-                    try {
-                        writer.write(String.valueOf(k));
-                        writer.write(','); // attribute-occurrence separator
-                        writer.write(String.valueOf(v));
-                        writer.write(';'); // attribute-attribute separator
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                });
-                writer.newLine();
-            }
+            values.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+                try {
+                    writer.write(entry.getKey());
+                    writer.newLine(); // separate the value and the serialized attributes by a new line
+                    entry.getValue().forEach((k, v) -> {
+                        try {
+                            writer.write(String.valueOf(k));
+                            writer.write(','); // attribute-occurrence separator
+                            writer.write(String.valueOf(v));
+                            writer.write(';'); // attribute-attribute separator
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    });
+                    writer.newLine();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            });
             writer.close();
+
+            values = new HashMap<>();
+            currentSize = 0;
 
         } catch (IOException e) {
             e.printStackTrace();
