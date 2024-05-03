@@ -149,7 +149,7 @@ public class Spind {
 
     private int iterativeMerge(Attribute[] attributes, List<MergeJob> mergeJobs) {
         int activeRelations = 1;
-        int merge = config.MERGE_SIZE / config.PARALLEL;
+        int merge = Math.max(2, config.MERGE_SIZE / config.PARALLEL); // we need to always merge at least two files
         while (!mergeJobs.isEmpty()) {
             // 1) group by relation
             List<MergeJob> groupedMergeJobs = new ArrayList<>();
