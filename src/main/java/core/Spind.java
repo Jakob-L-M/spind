@@ -2,6 +2,7 @@ package core;
 
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
+import com.opencsv.exceptions.CsvValidationException;
 import io.Merger;
 import io.Output;
 import io.Validator;
@@ -45,7 +46,7 @@ public class Spind {
         if (config.useFilter) this.filter = BloomFilter.create(Funnels.integerFunnel(), 100_000_000, 0.05);
     }
 
-    public void execute() throws IOException, InterruptedException {
+    public void execute() throws IOException, InterruptedException, CsvValidationException {
 
         logger.info("Starting execution");
 
@@ -209,7 +210,7 @@ public class Spind {
         return total;
     }
 
-    private RelationMetadata[] initializeRelations() throws IOException {
+    private RelationMetadata[] initializeRelations() throws IOException, CsvValidationException {
         RelationMetadata[] relationMetadata = new RelationMetadata[config.tableNames.length];
 
         int relationOffset = 0;
@@ -269,7 +270,7 @@ public class Spind {
                 continue;
             }
             for (Path chunkPath : relation.chunks) {
-                jobs.add(new SortJob(chunkPath, relation.connectedAttributes, relation.relationId, config.SORT_SIZE, config.CHUNK_SIZE, config, filter, layer));
+                jobs.add(new SortJob(chunkPath, relation.connectedAttributes, relation.relationId, config.SORT_SIZE / config.PARALLEL, config.CHUNK_SIZE, config, filter, layer));
             }
         }
 
