@@ -278,9 +278,9 @@ public class Candidates {
                 int referencedRelationId = attributes[referencedAttribute].getRelationId();
                 referredAttributes.computeIfAbsent(referencedRelationId, k -> new ArrayList<>());
 
-                referredAttributes.get(referencedRelationId).add(referencedAttribute - relationMetadata[referencedRelationId].relationOffset);
+                referredAttributes.get(referencedRelationId).add(referencedAttribute - relationMetadata[referencedRelationId].offset);
             }
-            relationMap.put(dependentAttribute - relationMetadata[dependentRelationId].relationOffset, referredAttributes);
+            relationMap.put(dependentAttribute - relationMetadata[dependentRelationId].offset, referredAttributes);
         }
     }
 

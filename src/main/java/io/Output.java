@@ -43,7 +43,7 @@ public class Output {
             outputWriter.write('(');
             for (int i = 0; i < dependantAttribute.getContainedColumns().length; i++) {
                 RelationMetadata input = inputs[dependantAttribute.getRelationId()];
-                outputWriter.write(input.relationName);
+                outputWriter.write(config.tableNames[input.id]);
                 outputWriter.write('.');
                 outputWriter.write(input.columnNames[dependantAttribute.getContainedColumns()[i]]);
                 if (i != dependantAttribute.getContainedColumns().length - 1) {
@@ -58,7 +58,7 @@ public class Output {
                 outputWriter.write(" (");
                 for (int i = 0; i < referredAttribute.getContainedColumns().length; i++) {
                     RelationMetadata input = inputs[referredAttribute.getRelationId()];
-                    outputWriter.write(input.relationName);
+                    outputWriter.write(config.tableNames[input.id]);
                     outputWriter.write('.');
                     outputWriter.write(input.columnNames[referredAttribute.getContainedColumns()[i]]);
                     if (i != referredAttribute.getContainedColumns().length - 1) {

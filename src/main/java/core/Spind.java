@@ -129,7 +129,7 @@ public class Spind {
 
             // clean relation files
             for (RelationMetadata relation : relationMetadata) {
-                Path relationFile = Path.of(config.tempFolder + File.separator + "relation_" + relation.relationId + ".txt");
+                Path relationFile = Path.of(config.tempFolder + File.separator + "relation_" + relation.id + ".txt");
                 if (Files.exists(relationFile)) Files.delete(relationFile);
             }
 
@@ -147,7 +147,7 @@ public class Spind {
         output.storeMetadata(config, clock, metrics);
     }
 
-    private int iterativeMerge(Attribute[] attributes, List<MergeJob> mergeJobs) {
+    private int iterativeMerge(Attribute[] attributes, List<MergeJob> mergeJobs) throws IOException {
         int activeRelations = 1;
         int merge = Math.max(2, config.MERGE_SIZE / config.PARALLEL); // we need to always merge at least two files
         while (!mergeJobs.isEmpty()) {
@@ -166,6 +166,12 @@ public class Spind {
 
             for (MergeJob job : groupedMergeJobs) {
                 if (job.chunkPaths().isEmpty()) {
+                    continue;
+                }
+                if (job.chunkPaths().size() == 1) {
+                    // Trivial Case: there was only one chunk for the relation which could be sorted without spilling
+                    // we just rename the file
+                    Files.move(job.chunkPaths().get(0), Path.of(config.tempFolder + File.separator + "relation_" + job.relationId() + ".txt"));
                     continue;
                 }
                 int n = job.chunkPaths().size();
@@ -210,27 +216,30 @@ public class Spind {
         return total;
     }
 
-    private RelationMetadata[] initializeRelations() throws IOException, CsvValidationException {
+    private RelationMetadata[] initializeRelations() throws IOException, CsvValidationException, InterruptedException {
         RelationMetadata[] relationMetadata = new RelationMetadata[config.tableNames.length];
 
         int relationOffset = 0;
         for (int relationId = 0; relationId < config.tableNames.length; relationId++) {
-            relationMetadata[relationId] = new RelationMetadata(config.tableNames[relationId], relationId, relationOffset,
+            relationMetadata[relationId] = new RelationMetadata(relationId, relationOffset,
                     Path.of(config.folderPath + File.separator + config.databaseName + File.separator + config.tableNames[relationId] + config.fileEnding), config);
             relationOffset += relationMetadata[relationId].columnNames.length;
         }
 
         clock.start("chunking");
         logger.info("Stating chunking");
-        Arrays.stream(relationMetadata).parallel().forEach(relation -> {
-            long sTime = System.currentTimeMillis();
+
+        ExecutorService executors = Executors.newFixedThreadPool(config.PARALLEL);
+        executors.invokeAll(Arrays.stream(relationMetadata).sorted().toList()).forEach(relation -> {
+
             try {
-                relation.createChunks(config.CHUNK_SIZE / relation.columnNames.length, config);
-            } catch (IOException e) {
+                relation.get();
+            } catch (ExecutionException | InterruptedException e) {
                 e.printStackTrace();
             }
-            logger.debug("Finished " + relation.relationName + " (" + (System.currentTimeMillis() - sTime) + "ms)");
         });
+        executors.shutdown();
+
         logger.info("Finished chunking. Took: " + clock.stop("chunking"));
 
         this.metrics.chunkFiles = Arrays.stream(relationMetadata).mapToInt(metadata -> metadata.chunks.size()).sum();
@@ -241,9 +250,9 @@ public class Spind {
     private Attribute[] buildUnaryAttributes() {
         Attribute[] attributes = new Attribute[Arrays.stream(relationMetadata).mapToInt(x -> x.columnNames.length).sum()];
         for (RelationMetadata input : relationMetadata) {
-            int relationOffset = input.relationOffset;
+            int relationOffset = input.offset;
             for (int i = 0; i < input.columnNames.length; i++) {
-                attributes[relationOffset + i] = new Attribute(relationOffset + i, input.relationId, new int[]{i});
+                attributes[relationOffset + i] = new Attribute(relationOffset + i, input.id, new int[]{i});
             }
         }
         return attributes;
@@ -270,7 +279,7 @@ public class Spind {
                 continue;
             }
             for (Path chunkPath : relation.chunks) {
-                jobs.add(new SortJob(chunkPath, relation.connectedAttributes, relation.relationId, config.SORT_SIZE / config.PARALLEL, config.CHUNK_SIZE, config, filter, layer));
+                jobs.add(new SortJob(chunkPath, relation.connectedAttributes, relation.id, config.SORT_SIZE / config.PARALLEL, config.CHUNK_SIZE, config, filter, layer));
             }
         }
 

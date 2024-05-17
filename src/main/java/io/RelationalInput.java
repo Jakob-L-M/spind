@@ -14,20 +14,23 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class RelationalInput {
 
     private final Config config;
+    private final int[] relaventAttributes;
     public List<Attribute> attributes;
     public String[] headerLine;
     protected CSVReader CSVReader;
     protected String[] nextLine;
     protected int currentLineNumber = -1; // Initialized to -1 because of lookahead
     protected int numberOfSkippedLines = 0;
+    int filterMasks;
     private boolean chunkReader = true;
 
-    public RelationalInput(Path relationPath, Config config) throws IOException {
+    public RelationalInput(Path relationPath, Config config) throws IOException, CsvValidationException {
 
         chunkReader = false;
 
@@ -39,7 +42,12 @@ public class RelationalInput {
                 new CSVReaderBuilder(reader).withCSVParser(new CSVParserBuilder().withSeparator(config.separator).withEscapeChar(config.fileEscape).withIgnoreLeadingWhiteSpace(config.ignoreLeadingWhiteSpace).withStrictQuotes(config.strictQuotes).withQuoteChar(config.quoteChar).build()).build();
 
         // read the first line
-        this.nextLine = readNextLine();
+        this.nextLine = CSVReader.readNext();
+
+        this.relaventAttributes = new int[nextLine.length];
+        for (int i = 0; i < relaventAttributes.length; i++) {
+            relaventAttributes[i] = i;
+        }
 
         if (config.inputFileHasHeader) {
             this.headerLine = this.nextLine;
@@ -51,6 +59,8 @@ public class RelationalInput {
         if (this.headerLine == null) {
             generateHeaderLine();
         }
+
+
     }
 
     /**
@@ -62,16 +72,20 @@ public class RelationalInput {
     public RelationalInput(SortJob sortJob, Config config) throws IOException {
         this.config = config;
 
+        this.attributes = new ArrayList<>();
+        for (Attribute connectedAttribute : sortJob.connectedAttributes()) {
+            attributes.add(new Attribute(connectedAttribute.getId(), connectedAttribute.getRelationId(), connectedAttribute.getContainedColumns()));
+        }
+
+        this.relaventAttributes = attributes.stream().flatMapToInt(x -> Arrays.stream(x.getContainedColumns())).distinct().toArray();
+
         BufferedReader reader = Files.newBufferedReader(sortJob.chunkPath());
 
         this.CSVReader = new CSVReaderBuilder(reader).withCSVParser(new CSVParserBuilder().withQuoteChar(config.quoteChar).withSeparator(config.separator).build()).build();
 
         // read the first line
         this.nextLine = readNextLine();
-        this.attributes = new ArrayList<>();
-        for (Attribute connectedAttribute : sortJob.connectedAttributes()) {
-            attributes.add(new Attribute(connectedAttribute.getId(), connectedAttribute.getRelationId(), connectedAttribute.getContainedColumns()));
-        }
+
     }
 
 
@@ -79,7 +93,7 @@ public class RelationalInput {
      * Builds the string representation for every attribute combination of the given relation and updates the attributes accordingly.
      *
      * @param filter The Bloom filter used to mask non-informative values.
-     * @param layer The integer indication, in which layer the algorithm currently is.
+     * @param layer  The integer indication, in which layer the algorithm currently is.
      */
     public void updateAttributeCombinations(BloomFilter<Integer> filter, int layer) {
         String[] values = next(filter, layer);
@@ -145,9 +159,10 @@ public class RelationalInput {
     }
 
     private void replaceNonInformative(String[] currentLine, BloomFilter<Integer> filter) {
-        for (int i = 0; i < currentLine.length; i++) {
-            if (currentLine[i] != null && !filter.mightContain(currentLine[i].hashCode())) {
-                currentLine[i] = null;
+        for (int ind : relaventAttributes) {
+            if (currentLine[ind] != null && !filter.mightContain(currentLine[ind].hashCode())) {
+                this.filterMasks++;
+                currentLine[ind] = null;
             }
         }
     }
@@ -210,14 +225,14 @@ public class RelationalInput {
      * @param lineArray The array of values to be processed
      */
     private void replaceNullAndEscape(String[] lineArray) {
-        for (int i = 0; i < lineArray.length; i++) {
-            if (chunkReader && lineArray[i].equals(config.nullString)) {
+        for (int ind : relaventAttributes) {
+            if (chunkReader && lineArray[ind].equals(config.nullString)) {
                 if (config.nullHandling != Config.NullHandling.EQUALITY) {
                     // in equality mode, we treat every null entry as the same exact value
-                    lineArray[i] = null;
+                    lineArray[ind] = null;
                 }
-            } else if (!chunkReader) {
-                lineArray[i] = lineArray[i].replace('\n', '\0');
+            } else if (!chunkReader && lineArray.length == headerLine.length) {
+                lineArray[ind] = lineArray[ind].replace('\n', '\0');
             }
         }
     }

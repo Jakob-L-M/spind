@@ -3,9 +3,9 @@ package runner;
 public class Config {
 
     public final double threshold;
-    public int PARALLEL = 11; //Runtime.getRuntime().availableProcessors(); // or specify your desired parallelism level
-    public int VALIDATION_SIZE = 150_000;
-    public int MERGE_SIZE = 1_100;
+    public int PARALLEL = Runtime.getRuntime().availableProcessors(); // or specify your desired parallelism level
+    public int VALIDATION_SIZE = 250_000;
+    public int MERGE_SIZE = 1_200;
     public int CHUNK_SIZE = 6_000_000;
     public int SORT_SIZE = 25_000_000;
     public int maxNary = -1;
@@ -33,39 +33,38 @@ public class Config {
     public boolean refineFilter = true; // whether the bloom filter should be reconstructed in every layer
     public boolean useFilter = true; // whether the bloom filter should be used
 
-    public Config(Config.Dataset dataset, double threshold) {
-        this.setDataset(dataset);
+    public Config(double threshold) {
         this.threshold = threshold;
     }
 
-    private void setDataset(Config.Dataset dataset) {
+    void setDataset(Config.Dataset dataset) {
         switch (dataset) {
             case ANIMAL_CROSSING -> {
-                this.databaseName = "animal-crossing-new-horizons-nookplaza-dataset";
+                this.databaseName = "ACNH";
                 this.tableNames = new String[]{"accessories", "achievements", "art", "bags", "bottoms", "construction", "dress-up", "fencing", "fish", "floors", "fossils",
                         "headwear", "housewares", "insects", "miscellaneous", "music", "other", "photos", "posters", "reactions", "recipes", "rugs", "shoes", "socks", "tools",
                         "tops", "umbrellas", "villagers", "wall-mounted", "wallpaper"};
             }
             case TPCH_1 -> {
-                this.databaseName = "TPCH_1";
+                this.databaseName = "TPC-H 1";
                 this.tableNames = new String[]{"customer", "lineitem", "nation", "orders", "part", "partsupp", "region", "supplier"};
                 this.separator = '|';
                 this.inputFileHasHeader = false;
                 this.fileEnding = ".tbl";
             }
             case TPCH_10 -> {
-                this.databaseName = "TPCH_10";
+                this.databaseName = "TPC-H 10";
                 this.tableNames = new String[]{"customer", "lineitem", "nation", "orders", "part", "partsupp", "region", "supplier"};
                 this.separator = '|';
                 this.inputFileHasHeader = false;
                 this.fileEnding = ".tbl";
             }
             case POPULATION -> {
-                this.databaseName = "population";
+                this.databaseName = "Population";
                 this.tableNames = new String[]{"midyear_population_age_country_code"};
             }
             case DATA_GOV -> {
-                this.databaseName = "data.gov";
+                this.databaseName = "US";
                 this.tableNames = new String[]{"Air_Quality", "Air_Traffic_Passenger_Statistics", "Crash_Reporting_-_Drivers_Data", "Crime_Data_from_2020_to_Present",
                         "diabetes_all_2016", "Electric_Vehicle_Population_Data", "iou_zipcodes_2020", "Lottery_Mega_Millions_Winning_Numbers__Beginning_2002",
                         "Lottery_Powerball_Winning_Numbers__Beginning_2010", "Motor_Vehicle_Collisions_-_Crashes", "National_Obesity_By_State", "NCHS_" +
@@ -75,19 +74,12 @@ public class Config {
                 this.inputFileHasHeader = true;
                 this.fileEnding = ".csv";
             }
-            case UEFA -> {
-                this.databaseName = "uefa";
-                this.tableNames = new String[]{"attacking", "attempts", "defending", "disciplinary", "distributon", "goalkeeping", "goals", "key_stats"};
-                this.separator = ',';
-                this.inputFileHasHeader = true;
-                this.fileEnding = ".csv";
-            }
             case CARS -> {
-                this.databaseName = "used-car-dataset-ford-and-mercedes";
+                this.databaseName = "Cars";
                 this.tableNames = new String[]{"audi", "bmw", "cclass", "focus", "ford", "hyundi", "merc", "skoda", "toyota", "unclean cclass", "unclean focus", "vauxhall", "vw"};
             }
             case MUSICBRAINZ -> {
-                this.databaseName = "musicbrainz";
+                this.databaseName = "Musicbrainz";
                 this.tableNames = new String[]{"alternative_release_type", "area", "area_alias", "area_alias_type", "area_gid_redirect", "area_type", "artist", "artist_alias",
                         "artist_alias_type", "artist_credit", "artist_credit_gid_redirect", "artist_credit_name", "artist_gid_redirect", "artist_ipi", "artist_isni",
                         "artist_type", "cdtoc", "country_area", "editor_collection_type", "event", "event_alias", "event_alias_type", "event_gid_redirect", "event_type", "gender"
@@ -117,7 +109,7 @@ public class Config {
                 this.nullString = "\\N";
             }
             case ENSEMBL_UNIPROT -> {
-                this.databaseName = "Ensembl";
+                this.databaseName = "UniProt";
                 this.separator = '\t';
                 this.fileEnding = ".111.uniprot.tsv";
                 this.tableNames = new String[]{"Acanthochromis_polyacanthus.ASM210954v1", "Accipiter_nisus.Accipiter_nisus_ver1.0", "Ailuropoda_melanoleuca.ASM200744v2",
@@ -190,7 +182,7 @@ public class Config {
                         "Zalophus_californianus.mZalCal1" + ".pri", "Zonotrichia_albicollis" + ".Zonotrichia_albicollis-1.0.1"};
             }
             case EU -> {
-                this.databaseName = "european union";
+                this.databaseName = "EU";
                 this.tableNames = new String[]{"01.01.2023-31.12.2023StatisticsReportMonthlyCfTsAwarded", "13a9ff77-forestfire-cp-apd-kritis-2003-2009_0", "55gy-3b6m",
                         "638_trafikkstasjon-eksport", "cheltuieli-in-spitale-2020-2021", "City_street_Tranche_CP", "contagem-dos-dias-de-ausencia-ao-trabalho-segundo-o-motivo-de"
                         + "-ausencia", "contenedores", "Course details 2021 2022-1", "estat_migr_asyunaa_en", "estat_nrg_ti_coifpm_en", "estat_sts_cobp_q_en", "groupes-active",
@@ -250,7 +242,7 @@ public class Config {
     }
 
     public enum Dataset {
-        TPCH_1, TPCH_10, ANIMAL_CROSSING, DATA_GOV, EU, UEFA, MUSICBRAINZ, CARS, ENSEMBL_UNIPROT, POPULATION, T2D, TESMA, WEB_TABLES
+        TPCH_1, TPCH_10, ANIMAL_CROSSING, DATA_GOV, EU, MUSICBRAINZ, CARS, ENSEMBL_UNIPROT, POPULATION, T2D, TESMA, WEB_TABLES
     }
 
     public enum NullHandling {
