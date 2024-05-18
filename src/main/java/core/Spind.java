@@ -147,7 +147,7 @@ public class Spind {
         output.storeMetadata(config, clock, metrics);
     }
 
-    private int iterativeMerge(Attribute[] attributes, List<MergeJob> mergeJobs) throws IOException {
+    private int iterativeMerge(Attribute[] attributes, List<MergeJob> mergeJobs) {
         int activeRelations = 1;
         int merge = Math.max(2, config.MERGE_SIZE / config.PARALLEL); // we need to always merge at least two files
         while (!mergeJobs.isEmpty()) {
@@ -166,12 +166,6 @@ public class Spind {
 
             for (MergeJob job : groupedMergeJobs) {
                 if (job.chunkPaths().isEmpty()) {
-                    continue;
-                }
-                if (job.chunkPaths().size() == 1) {
-                    // Trivial Case: there was only one chunk for the relation which could be sorted without spilling
-                    // we just rename the file
-                    Files.move(job.chunkPaths().get(0), Path.of(config.tempFolder + File.separator + "relation_" + job.relationId() + ".txt"));
                     continue;
                 }
                 int n = job.chunkPaths().size();

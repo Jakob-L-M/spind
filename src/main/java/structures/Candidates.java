@@ -397,7 +397,7 @@ public class Candidates {
             PINDList.PINDIterator referenced = current[dependantId].getReferenced().elementIterator();
             while (referenced.hasNext()) {
                 PINDList.PINDElement ref = referenced.next();
-                ref.violationsLeft = maxViolations;
+                ref.setViolations(maxViolations);
                 current[ref.id].numReferencedBy++;
             }
         }

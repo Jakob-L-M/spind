@@ -64,12 +64,14 @@ public class PINDList {
     public static class PINDElement {
 
         public int id;
-        public long violationsLeft;
+        private long violationCap;
+        private long violations;
         private PINDElement next = null;
 
-        public PINDElement(int value, long violationsLeft) {
+        public PINDElement(int value, long maxViolations) {
             this.id = value;
-            this.violationsLeft = violationsLeft;
+            this.violationCap = maxViolations;
+            violations = 0L;
         }
 
         /**
@@ -79,8 +81,16 @@ public class PINDList {
          * @return the remaining violations
          */
         public long violate(long occurrences) {
-            violationsLeft -= occurrences;
-            return violationsLeft;
+            violations += occurrences;
+            return violationCap - violations;
+        }
+
+        public void setViolations(long maxViolations) {
+            this.violationCap = maxViolations;
+        }
+
+        public long getViolations() {
+            return violations;
         }
     }
 
