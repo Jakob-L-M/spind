@@ -1,15 +1,16 @@
 package runner;
 
+import com.opencsv.exceptions.CsvValidationException;
 import core.Spind;
 
 import java.io.IOException;
 
 public class Runner {
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, InterruptedException, CsvValidationException {
 
         long startTime = System.currentTimeMillis();
 
-        Config config = new Config(Config.Dataset.CARS, 1.0);
+        Config config = new Config(0.93);
 
         config.maxNary = 1;
 
@@ -20,6 +21,8 @@ public class Runner {
             config.VALIDATION_SIZE = Integer.parseInt(args[3]);
             System.out.println("Used args to set variables");
         }
+
+        config.setDataset("path_to_folder");
 
         Spind spind = new Spind(config);
         spind.execute();

@@ -1,20 +1,23 @@
 package runner;
 
+import java.io.File;
+import java.io.IOException;
+
 public class Config {
 
     public final double threshold;
     public int PARALLEL = Runtime.getRuntime().availableProcessors(); // or specify your desired parallelism level
-    public int VALIDATION_SIZE = 250_000;
-    public int MERGE_SIZE = 1_200;
+    public int VALIDATION_SIZE = 50_000;
+    public int MERGE_SIZE = 500;
     public int CHUNK_SIZE = 6_000_000;
-    public int SORT_SIZE = 25_000_000;
+    public int SORT_SIZE = 10_000_000;
     public int maxNary = -1;
     public String databaseName;
     public String[] tableNames;
     public String DEFAULT_HEADER_STRING = "column";
-    public String folderPath = "D:\\MA\\data\\";
-    public String tempFolder = "E:\\temp";
-    public String resultFolder = ".\\statistics";
+    public String folderPath = "/Users/jlmueller/Documents/";
+    public String tempFolder = "/Users/jlmueller/Documents/temp";
+    public String resultFolder = "./statistics";
     public String fileEnding = ".csv";
     public char separator = ',';
     public char quoteChar = '\"';
@@ -35,6 +38,29 @@ public class Config {
 
     public Config(double threshold) {
         this.threshold = threshold;
+    }
+
+    /**
+     * Set the input dataset using a path to some folder.
+     * @param datasetPath path to the folder where the tables are stored in
+     */
+    void setDataset(String datasetPath) throws IOException {
+        File folder = new File(this.folderPath + File.separator + datasetPath);
+        if (!folder.exists()) {
+            throw new IOException("The dataset folder does not exist:" + folder.getAbsolutePath());
+        }
+        if (!folder.isDirectory()) {
+            throw new IOException("The dataset folder is not a directory:" + folder.getAbsolutePath());
+        }
+        File[] files = folder.listFiles();
+        if (files == null) {
+            throw new IOException("The dataset folder does not contain any files:" + folder.getAbsolutePath());
+        }
+        this.databaseName = folder.getName();
+        this.tableNames = new String[files.length];
+        for (int i = 0; i < files.length; i++) {
+            tableNames[i] = files[i].getName().replaceFirst("[.][^.]+$", "");
+        }
     }
 
     void setDataset(Config.Dataset dataset) {
