@@ -28,7 +28,7 @@ public class RelationMetadata implements Callable<Void>, Comparable<RelationMeta
     public final List<Path> chunks;
     public final int id;
     public final int offset;
-    private final RelationalInput relationalInput;
+    public final RelationalInput relationalInput;
     private final Config config;
     private final Logger logger = LoggerFactory.getLogger(RelationMetadata.class);
     private final long size;

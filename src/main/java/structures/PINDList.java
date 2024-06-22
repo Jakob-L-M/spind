@@ -1,5 +1,8 @@
 package structures;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.Collection;
 
 /**
@@ -64,7 +67,8 @@ public class PINDList {
     public static class PINDElement {
 
         public int id;
-        private long violationCap;
+        public long violationCap;
+        @Getter
         private long violations;
         private PINDElement next = null;
 
@@ -83,14 +87,6 @@ public class PINDList {
         public long violate(long occurrences) {
             violations += occurrences;
             return violationCap - violations;
-        }
-
-        public void setViolations(long maxViolations) {
-            this.violationCap = maxViolations;
-        }
-
-        public long getViolations() {
-            return violations;
         }
     }
 

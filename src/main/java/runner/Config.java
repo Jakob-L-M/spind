@@ -27,7 +27,7 @@ public class Config {
     public boolean inputFileHasHeader = true;
     public boolean inputFileSkipDifferingLines = true; // Skip lines that differ from the dataset's schema
     public String nullString = "";
-    public boolean writeResults = false;
+    public boolean writeResults = true;
     public String executionName = "SPIND";
 
     public DuplicateHandling duplicateHandling = DuplicateHandling.AWARE;

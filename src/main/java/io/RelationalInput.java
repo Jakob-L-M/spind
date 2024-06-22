@@ -20,7 +20,7 @@ import java.util.List;
 public class RelationalInput {
 
     private final Config config;
-    private final int[] relaventAttributes;
+    private final int[] relevantAttributes;
     public List<Attribute> attributes;
     public String[] headerLine;
     protected CSVReader CSVReader;
@@ -44,9 +44,9 @@ public class RelationalInput {
         // read the first line
         this.nextLine = CSVReader.readNext();
 
-        this.relaventAttributes = new int[nextLine.length];
-        for (int i = 0; i < relaventAttributes.length; i++) {
-            relaventAttributes[i] = i;
+        this.relevantAttributes = new int[nextLine.length];
+        for (int i = 0; i < relevantAttributes.length; i++) {
+            relevantAttributes[i] = i;
         }
 
         if (config.inputFileHasHeader) {
@@ -77,7 +77,7 @@ public class RelationalInput {
             attributes.add(new Attribute(connectedAttribute.getId(), connectedAttribute.getRelationId(), connectedAttribute.getContainedColumns()));
         }
 
-        this.relaventAttributes = attributes.stream().flatMapToInt(x -> Arrays.stream(x.getContainedColumns())).distinct().toArray();
+        this.relevantAttributes = attributes.stream().flatMapToInt(x -> Arrays.stream(x.getContainedColumns())).distinct().toArray();
 
         BufferedReader reader = Files.newBufferedReader(sortJob.chunkPath());
 
@@ -159,7 +159,7 @@ public class RelationalInput {
     }
 
     private void replaceNonInformative(String[] currentLine, BloomFilter<Integer> filter) {
-        for (int ind : relaventAttributes) {
+        for (int ind : relevantAttributes) {
             if (currentLine[ind] != null && !filter.mightContain(currentLine[ind].hashCode())) {
                 this.filterMasks++;
                 currentLine[ind] = null;
@@ -225,7 +225,7 @@ public class RelationalInput {
      * @param lineArray The array of values to be processed
      */
     private void replaceNullAndEscape(String[] lineArray) {
-        for (int ind : relaventAttributes) {
+        for (int ind : relevantAttributes) {
             if (chunkReader && lineArray[ind].equals(config.nullString)) {
                 if (config.nullHandling != Config.NullHandling.EQUALITY) {
                     // in equality mode, we treat every null entry as the same exact value
