@@ -11,13 +11,14 @@ import structures.SortJob;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class RelationalInput {
+public class RelationalInput implements RowInput {
 
     private final Config config;
     private final int[] relevantAttributes;
@@ -44,6 +45,10 @@ public class RelationalInput {
         // read the first line
         this.nextLine = CSVReader.readNext();
 
+        if (nextLine == null) {
+            CSVReader.close();
+            throw new IOException("Input has no schema: " + relationPath);
+        }
         this.relevantAttributes = new int[nextLine.length];
         for (int i = 0; i < relevantAttributes.length; i++) {
             relevantAttributes[i] = i;
@@ -141,6 +146,11 @@ public class RelationalInput {
         return !(this.nextLine == null);
     }
 
+    @Override
+    public String[] columnNames() {
+        return headerLine;
+    }
+
     private String[] next(BloomFilter<Integer> filter, int layer) {
         String[] currentLine = this.nextLine;
 
@@ -210,7 +220,7 @@ public class RelationalInput {
         try {
             lineArray = this.CSVReader.readNext();
         } catch (CsvValidationException | IOException e) {
-            e.printStackTrace();
+            throw new UncheckedIOException(new IOException("Could not read input row", e));
         }
         if (lineArray == null) {
             return null;
@@ -226,7 +236,14 @@ public class RelationalInput {
      */
     private void replaceNullAndEscape(String[] lineArray) {
         for (int ind : relevantAttributes) {
-            if (chunkReader && lineArray[ind].equals(config.nullString)) {
+            if (chunkReader && config.encodeChunkValues) {
+                // Keep non-null values encoded: sorting and tuple comparison only require
+                // equality, and the encoding keeps newlines out of the sorted files.
+                String encoded = lineArray[ind];
+                lineArray[ind] = encoded.equals("N")
+                        ? (config.nullHandling == Config.NullHandling.EQUALITY ? "N" : null)
+                        : encoded;
+            } else if (chunkReader && lineArray[ind].equals(config.nullString)) {
                 if (config.nullHandling != Config.NullHandling.EQUALITY) {
                     // in equality mode, we treat every null entry as the same exact value
                     lineArray[ind] = null;

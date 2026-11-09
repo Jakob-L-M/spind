@@ -19,6 +19,9 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @noinspection UnstableApiUsage
@@ -33,15 +36,21 @@ public class Spind {
     RelationMetadata[] relationMetadata;
     int layer;
     private BloomFilter<Integer> filter;
+    private final RelationMetadata[] suppliedRelations;
 
     public Spind(Config config) {
+        this(config, null, new Output(config.resultFolder));
+    }
+
+    public Spind(Config config, RelationMetadata[] relations, Output output) {
         this.clock = new Clock();
         clock.start("total");
 
         this.metrics = new Metrics();
         this.config = config;
         maxNary = config.maxNary;
-        this.output = new Output(config.resultFolder);
+        this.output = output;
+        this.suppliedRelations = relations;
         this.logger = LoggerFactory.getLogger(Spind.class);
         if (config.useFilter) this.filter = BloomFilter.create(Funnels.integerFunnel(), 100_000_000, 0.05);
     }
@@ -79,16 +88,7 @@ public class Spind {
             // candidates.current.get(x).size()).sum() + " candidates");
             // 3.1) Load all attributes of the candidates.
             clock.start("sorting");
-            ExecutorService executors = Executors.newFixedThreadPool(config.PARALLEL);
-            List<SortResult> sortResults = executors.invokeAll(sortJobs.stream().sorted().toList()).stream().map(sortResultFuture -> {
-                try {
-                    return sortResultFuture.get();
-                } catch (InterruptedException | ExecutionException e) {
-                    e.printStackTrace();
-                    return new SortResult(null, null);
-                }
-            }).toList();
-            executors.shutdown();
+            List<SortResult> sortResults = invokeJobs(sortJobs.stream().sorted().toList());
 
             logger.info("Finished sorting. Took: " + clock.stop("sorting") + "ms");
 
@@ -147,7 +147,7 @@ public class Spind {
         output.storeMetadata(config, clock, metrics);
     }
 
-    private int iterativeMerge(Attribute[] attributes, List<MergeJob> mergeJobs) {
+    private int iterativeMerge(Attribute[] attributes, List<MergeJob> mergeJobs) throws IOException, InterruptedException {
         int activeRelations = 1;
         int merge = Math.max(2, config.MERGE_SIZE / config.PARALLEL); // we need to always merge at least two files
         while (!mergeJobs.isEmpty()) {
@@ -188,13 +188,16 @@ public class Spind {
 
             metrics.mergeFiles += currentJobs.size();
 
-            currentJobs.parallelStream().forEach(mergeJob -> {
-                if (mergeJob.chunkPaths().isEmpty()) {
-                    return;
-                }
-                Merger merger = new Merger();
-                merger.merge(mergeJob.chunkPaths(), mergeJob.to(), attributes, mergeJob.isFinal());
-            });
+            List<Callable<Void>> tasks = new ArrayList<>();
+            for (MergeJob job : currentJobs) {
+                tasks.add(() -> {
+                    if (!job.chunkPaths().isEmpty()) {
+                        new Merger().merge(job.chunkPaths(), job.to(), attributes, job.isFinal());
+                    }
+                    return null;
+                });
+            }
+            invokeJobs(tasks);
             mergeJobs = nextJobs;
         }
         return activeRelations;
@@ -211,34 +214,54 @@ public class Spind {
     }
 
     private RelationMetadata[] initializeRelations() throws IOException, CsvValidationException, InterruptedException {
-        RelationMetadata[] relationMetadata = new RelationMetadata[config.tableNames.length];
+        RelationMetadata[] relationMetadata = suppliedRelations;
 
-        int relationOffset = 0;
-        for (int relationId = 0; relationId < config.tableNames.length; relationId++) {
-            relationMetadata[relationId] = new RelationMetadata(relationId, relationOffset,
-                    Path.of(config.folderPath + File.separator + config.databaseName + File.separator + config.tableNames[relationId] + config.fileEnding), config);
-            relationOffset += relationMetadata[relationId].columnNames.length;
+        if (relationMetadata == null) {
+            relationMetadata = new RelationMetadata[config.tableNames.length];
+            int relationOffset = 0;
+            for (int relationId = 0; relationId < config.tableNames.length; relationId++) {
+                relationMetadata[relationId] = new RelationMetadata(relationId, relationOffset,
+                        Path.of(config.folderPath + File.separator + config.databaseName + File.separator + config.tableNames[relationId] + config.fileEnding), config);
+                relationOffset += relationMetadata[relationId].columnNames.length;
+            }
         }
 
         clock.start("chunking");
         logger.info("Stating chunking");
 
-        ExecutorService executors = Executors.newFixedThreadPool(config.PARALLEL);
-        executors.invokeAll(Arrays.stream(relationMetadata).sorted().toList()).forEach(relation -> {
-
-            try {
-                relation.get();
-            } catch (ExecutionException | InterruptedException e) {
-                e.printStackTrace();
-            }
-        });
-        executors.shutdown();
+        invokeJobs(Arrays.stream(relationMetadata).sorted().toList());
 
         logger.info("Finished chunking. Took: " + clock.stop("chunking"));
 
         this.metrics.chunkFiles = Arrays.stream(relationMetadata).mapToInt(metadata -> metadata.chunks.size()).sum();
 
         return relationMetadata;
+    }
+
+    private <T> List<T> invokeJobs(List<? extends Callable<T>> jobs) throws IOException, InterruptedException {
+        ExecutorService executor = Executors.newFixedThreadPool(config.PARALLEL);
+        try {
+            List<T> results = new ArrayList<>();
+            for (Future<T> future : executor.invokeAll(jobs)) {
+                try {
+                    results.add(future.get());
+                } catch (ExecutionException e) {
+                    throw new IOException("SPIND worker failed", e.getCause());
+                }
+            }
+            return results;
+        } finally {
+            executor.shutdownNow();
+            boolean interrupted = false;
+            while (!executor.isTerminated()) {
+                try {
+                    executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
+            }
+            if (interrupted) Thread.currentThread().interrupt();
+        }
     }
 
     private Attribute[] buildUnaryAttributes() {

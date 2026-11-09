@@ -65,47 +65,37 @@ public class Sorter {
      * @param layer   The current layer, equal to the dimension of the connected attributes.
      * @return A Tuple including a MergeJob and the connected attributes.
      */
-    public SortResult process(SortJob sortJob, Config config, BloomFilter<Integer> filter, int layer) {
+    public SortResult process(SortJob sortJob, Config config, BloomFilter<Integer> filter, int layer) throws IOException {
         spillCount = 0;
         spilledFiles = new ArrayList<>();
 
-        RelationalInput input;
-        try {
-            input = new RelationalInput(sortJob, config);
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
-        while (input.hasNext()) {
-            input.updateAttributeCombinations(filter, layer);
-            for (Attribute attribute : input.attributes) {
-                String value = attribute.getCurrentValue();
+        try (RelationalInput input = new RelationalInput(sortJob, config)) {
+            while (input.hasNext()) {
+                if (Thread.currentThread().isInterrupted()) throw new IOException("Sorting interrupted");
+                input.updateAttributeCombinations(filter, layer);
+                for (Attribute attribute : input.attributes) {
+                    String value = attribute.getCurrentValue();
 
-                if (value == null) {
-                    attribute.getMetadata().nullEntries++;
-                    continue;
-                }
+                    if (value == null) {
+                        attribute.getMetadata().nullEntries++;
+                        continue;
+                    }
 
-                Map<Integer, Long> valueMap = values.computeIfAbsent(value, v -> new HashMap<>());
+                    Map<Integer, Long> valueMap = values.computeIfAbsent(value, v -> new HashMap<>());
 
-                if (1L == valueMap.compute(attribute.getId(), (k, v) -> v == null ? 1L : ++v)) {
-                    if (++currentSize > maxMapSize) {
-                        spill(sortJob.chunkPath(), false);
+                    if (1L == valueMap.compute(attribute.getId(), (k, v) -> v == null ? 1L : ++v)) {
+                        if (++currentSize > maxMapSize) {
+                            spill(sortJob.chunkPath(), false);
+                        }
                     }
                 }
             }
+            // Save any remaining values before ending the job.
+            if (!values.isEmpty()) {
+                spill(sortJob.chunkPath(), true);
+            }
+            return new SortResult(new MergeJob(spilledFiles, sortJob.relationId(), null, false), input.attributes);
         }
-        // if there are value which have not been written yet, we need to save them before ending the job
-        if (!values.isEmpty()) {
-            spill(sortJob.chunkPath(), true);
-        }
-        // close the input reader
-        try {
-            input.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return new SortResult(new MergeJob(spilledFiles, sortJob.relationId(), null, false), input.attributes);
     }
 
     /**
@@ -113,7 +103,7 @@ public class Sorter {
      *
      * @param chunkPath the path to which the file should be written.
      */
-    private void spill(Path chunkPath, boolean isFinal) {
+    private void spill(Path chunkPath, boolean isFinal) throws IOException {
         spillCount++;
         Path spillPath = Path.of(chunkPath + "_" + spillCount + ".txt");
         toDisk(spillPath, isFinal);
@@ -127,36 +117,21 @@ public class Sorter {
      * @param outputPath The path to which the file is written. Will overwrite an existing file.
      * @param isFinal    A flag to indicate if the data to spill is the final action of the sorter.
      */
-    private void toDisk(Path outputPath, boolean isFinal) {
-        try {
-            BufferedWriter writer = Files.newBufferedWriter(outputPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
-
-            values.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
-                try {
-                    writer.write(entry.getKey());
-                    writer.newLine(); // separate the value and the serialized attributes by a new line
-                    entry.getValue().forEach((k, v) -> {
-                        try {
-                            writer.write(String.valueOf(k));
-                            writer.write(','); // attribute-occurrence separator
-                            writer.write(String.valueOf(v));
-                            writer.write(';'); // attribute-attribute separator
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                    });
-                    writer.newLine();
-                } catch (IOException e) {
-                    e.printStackTrace();
+    private void toDisk(Path outputPath, boolean isFinal) throws IOException {
+        try (BufferedWriter writer = Files.newBufferedWriter(outputPath, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE)) {
+            for (var entry : values.entrySet().stream().sorted(Map.Entry.comparingByKey()).toList()) {
+                writer.write(entry.getKey());
+                writer.newLine();
+                for (var attribute : entry.getValue().entrySet()) {
+                    writer.write(String.valueOf(attribute.getKey()));
+                    writer.write(',');
+                    writer.write(String.valueOf(attribute.getValue()));
+                    writer.write(';');
                 }
-            });
-            writer.close();
-
-            values = new HashMap<>();
-            currentSize = 0;
-
-        } catch (IOException e) {
-            e.printStackTrace();
+                writer.newLine();
+            }
         }
+        values = new HashMap<>();
+        currentSize = 0;
     }
 }

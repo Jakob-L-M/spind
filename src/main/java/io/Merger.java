@@ -42,42 +42,38 @@ public class Merger {
 
     }
 
-    public void merge(List<Path> files, Path to, Attribute[] attributes, boolean isFinal) {
+    public void merge(List<Path> files, Path to, Attribute[] attributes, boolean isFinal) throws IOException {
         try {
             this.init(files);
 
-            BufferedWriter output = Files.newBufferedWriter(to, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            try (BufferedWriter output = Files.newBufferedWriter(to, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                if (!headValues.isEmpty()) {
+                    Entry previous = headValues.poll();
+                    updateHeadValues(previous);
+                    HashMap<Integer, Long> containedAttributes = new HashMap<>();
 
-            if (headValues.isEmpty()) return;
-
-            Entry previous = headValues.poll();
-            updateHeadValues(previous);
-            HashMap<Integer, Long> containedAttributes = new HashMap<>();
-
-            while (!this.headValues.isEmpty()) {
-                Entry current = headValues.poll();
-                if (!previous.equals(current)) {
-                    // the previous value (group) is different -> safe value (group) to disk
+                    while (!this.headValues.isEmpty()) {
+                        if (Thread.currentThread().isInterrupted()) throw new IOException("Merging interrupted");
+                        Entry current = headValues.poll();
+                        if (!previous.equals(current)) {
+                            // The previous value group is complete; save it to disk.
+                            writeValue(containedAttributes, attributes, output, previous, isFinal);
+                            if (!containedAttributes.isEmpty()) containedAttributes = new HashMap<>();
+                        } else {
+                            // Add the previous entry to the current value group.
+                            previous.load(containedAttributes);
+                        }
+                        previous = current;
+                        updateHeadValues(current);
+                    }
                     writeValue(containedAttributes, attributes, output, previous, isFinal);
-                    if (!containedAttributes.isEmpty()) containedAttributes = new HashMap<>();
-                } else {
-                    // the current value still belongs to the value group.
-                    // load previous and add to connected attributes
-                    previous.load(containedAttributes);
                 }
-                // update previous
-                previous = current;
-
-                updateHeadValues(current);
             }
-            writeValue(containedAttributes, attributes, output, previous, isFinal);
-            output.close();
+        } finally {
             closeReaders();
-            for (Path path : files) {
-                Files.delete(path);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+        }
+        for (Path path : files) {
+            Files.delete(path);
         }
     }
 
@@ -142,8 +138,17 @@ public class Merger {
      * @throws IOException If a file is locked and the reader therefore can not be closed.
      */
     private void closeReaders() throws IOException {
+        if (readers == null) return;
+        IOException failure = null;
         for (BufferedReader reader : readers) {
-            reader.close();
+            if (reader == null) continue;
+            try {
+                reader.close();
+            } catch (IOException e) {
+                if (failure == null) failure = e;
+                else failure.addSuppressed(e);
+            }
         }
+        if (failure != null) throw failure;
     }
 }

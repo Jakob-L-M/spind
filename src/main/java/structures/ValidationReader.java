@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayDeque;
 
 /**
@@ -56,7 +57,7 @@ public class ValidationReader {
                 if (nextLine != null) nextOccurrence = reader.readLine();
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new UncheckedIOException(e);
         }
 
         // if the relation file ran out of values, we mark the relation as finished.
@@ -72,7 +73,7 @@ public class ValidationReader {
         try {
             reader.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new UncheckedIOException(e);
         }
     }
 }

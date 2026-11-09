@@ -42,7 +42,12 @@ public class Validator {
             filter = BloomFilter.create(Funnels.integerFunnel(), 100_000_000, 0.05);
         }
 
-        parallelPrune(layer, filter);
+        try {
+            parallelPrune(layer, filter);
+        } finally {
+            for (ValidationReader reader : readers) reader.close();
+            readers.clear();
+        }
 
         return filter;
     }

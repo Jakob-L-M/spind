@@ -28,6 +28,9 @@ public class Config {
     public boolean inputFileSkipDifferingLines = true; // Skip lines that differ from the dataset's schema
     public String nullString = "";
     public boolean writeResults = true;
+    public boolean writeMetadata = true;
+    // Lossless chunk encoding for inputs that already distinguish nulls from empty strings.
+    public boolean encodeChunkValues = false;
     public String executionName = "SPIND";
 
     public DuplicateHandling duplicateHandling = DuplicateHandling.AWARE;
